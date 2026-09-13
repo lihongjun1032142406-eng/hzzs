@@ -406,6 +406,9 @@ class MediaProjectionCaptureService : Service() {
         val previous = reader
         reader = replacement
         previous?.setOnImageAvailableListener(null, null)
+        // createOrResizeDisplay 在 capture worker thread 上运行；
+        // 因此旧 reader 的 listener 回调与 close 串行，避免读取中的 Image
+        // 被另一线程关闭后触发 "buffer is inaccessible"。
         previous?.close()
     }
 
@@ -413,11 +416,19 @@ class MediaProjectionCaptureService : Service() {
         super.onConfigurationChanged(newConfig)
         val activeProjection = projection ?: return
         if (stopping) return
-        runCatching { createOrResizeDisplay(activeProjection) }
-            .onFailure { error ->
-                source.fail("屏幕方向变化后重建截图表面失败：${error.message}", true)
-                cleanup(updateStateToIdle = false, stopProjection = true, stopService = true)
-            }
+        val handler = workerHandler ?: return
+
+        handler.post {
+            if (stopping || projection !== activeProjection) return@post
+            runCatching { createOrResizeDisplay(activeProjection) }
+                .onFailure { error ->
+                    Handler(Looper.getMainLooper()).post {
+                        if (stopping) return@post
+                        source.fail("屏幕方向变化后重建截图表面失败：${error.message}", true)
+                        cleanup(updateStateToIdle = false, stopProjection = true, stopService = true)
+                    }
+                }
+        }
     }
 
     private fun cleanup(
