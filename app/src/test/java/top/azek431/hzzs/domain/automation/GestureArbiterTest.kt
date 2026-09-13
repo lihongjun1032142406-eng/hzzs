@@ -68,12 +68,13 @@ class GestureArbiterTest {
             clock = { 10L },
             dispatcher = GestureDispatcher { action ->
                 order += "start-${action.id}"
-                delay(250L)
+                // 当前仲裁器会按手势开销扩展主超时预算（默认点击约 2930ms）。
+                // 延迟超过主预算、但落在 POST_TIMEOUT_DRAIN 内，才能真正覆盖 drain 持锁语义。
+                delay(3_500L)
                 order += "end-${action.id}"
                 DispatchReceipt(action, DispatchOutcome.COMPLETED)
             },
-            // 主超时很短，迫使走 POST_TIMEOUT_DRAIN；drain 期间仍持锁，第二单不得 start。
-            dispatchTimeoutMs = 50L,
+            dispatchTimeoutMs = 100L,
         )
         val first = async {
             arbiter.dispatch(action(1).copy(expiresAtUptimeMs = 20_000L))

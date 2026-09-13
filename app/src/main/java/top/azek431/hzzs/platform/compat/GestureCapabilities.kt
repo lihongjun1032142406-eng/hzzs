@@ -31,7 +31,9 @@ data class GestureBackendResolution(
     val effective: GestureBackend,
     val fallbackReason: String? = null,
 ) {
-    val fellBack: Boolean get() = requested != effective
+    // AUTO 正常解析到首选 ACCESSIBILITY 不属于 fallback；
+    // 只有明确给出 fallbackReason 时才表示发生了降级/替代路径。
+    val fellBack: Boolean get() = fallbackReason != null
 }
 
 /**

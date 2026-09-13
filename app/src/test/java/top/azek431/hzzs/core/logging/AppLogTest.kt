@@ -173,7 +173,8 @@ class DiagnosticsExporterTest {
         // 本地时区 + 偏移；不得再出现假 UTC 的 `...Z` 样式（无偏移）。
         assertTrue(report.contains("generatedAt="))
         assertTrue(
-            Regex("""generatedAt=\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}""")
+            // SimpleDateFormat XXX 在真实 UTC 时区会合法输出 Z；非 UTC 时输出 ±HH:MM。
+            Regex("""generatedAt=\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}(?:Z|[+-]\d{2}:\d{2})""")
                 .containsMatchIn(report),
         )
         assertTrue(report.contains("Timestamps use the device local timezone with offset"))

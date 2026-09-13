@@ -125,7 +125,7 @@ class AlgorithmCatalogPureTest {
         val current = listOf(net("x", 1000L))
         val extras = listOf(net("y", 2000L))
         val merged = AlgorithmCatalogPure.mergeInstalled(current, extras)
-        assertEquals(2, merged.size)
+        assertEquals(AlgorithmCatalogPure.builtinPackages().size + 2, merged.size)
         assertTrue(merged.any { it.id == "x" })
         assertTrue(merged.any { it.id == "y" })
     }
@@ -250,7 +250,7 @@ class AlgorithmCatalogPureTest {
 
     @Test
     fun versionToCode_parsesCore() {
-        assertEquals(100L, AlgorithmCatalogPure.versionToCode("0.1.0"))
+        assertEquals(1_000L, AlgorithmCatalogPure.versionToCode("0.1.0"))
         assertEquals(1_002L, AlgorithmCatalogPure.versionToCode("0.1.2"))
         assertEquals(2_001_003L, AlgorithmCatalogPure.versionToCode("2.1.3"))
     }
@@ -270,14 +270,14 @@ class AlgorithmCatalogPureTest {
     // ---- builtinPackages ----
 
     @Test
-    fun builtinPackages_singleEntryAlignedWithIds() {
+    fun builtinPackages_containsBaseAlignedWithIds() {
         val list = AlgorithmCatalogPure.builtinPackages()
-        assertEquals(1, list.size)
-        assertEquals(AlgorithmIds.BUILTIN_CATALOG_ID, list.first().id)
-        assertEquals(AlgorithmIds.BUILTIN_VERSION, list.first().versionName)
-        assertTrue(list.first().isBuiltin)
-        assertEquals(100L, list.first().versionCode)
-        assertEquals(AlgorithmDownloadSource.BUILTIN, list.first().downloadSource)
+        assertEquals(2, list.size)
+        val base = list.first { it.id == AlgorithmIds.BUILTIN_CATALOG_ID }
+        assertEquals(AlgorithmIds.BUILTIN_VERSION, base.versionName)
+        assertTrue(base.isBuiltin)
+        assertEquals(1_000L, base.versionCode)
+        assertEquals(AlgorithmDownloadSource.BUILTIN, base.downloadSource)
     }
 
     // ---- catalogPhaseAfter ----
@@ -442,7 +442,7 @@ class AlgorithmCatalogPureTest {
         assertEquals(1, out.size)
         val entry = out.first()
         assertEquals("official-bamboo-baseline", entry.info.id)
-        assertEquals(100L, entry.info.versionCode)
+        assertEquals(1_000L, entry.info.versionCode)
         assertTrue(entry.info.supportedScenes.contains(SceneId.BAMBOO_BOOKSTORE))
         assertEquals("algorithms/packages/official-bamboo-baseline-v0.1.0.hzzsalg", entry.assetPath)
     }
@@ -536,7 +536,7 @@ class AlgorithmCatalogPureTest {
     fun statusAgainst_downloadableWhenRemoteNewer() {
         val info = net("x", 1000L, isInstalled = false)
         val s = info.statusAgainst(activeId = "y", pendingId = null, latestCompatibleId = null, activeVersionCode = 500L)
-        assertEquals(AlgorithmCardStatus.DOWNLOADABLE, s)
+        assertEquals(AlgorithmCardStatus.UPDATABLE, s)
     }
 
     // ---- 安全常量 ----

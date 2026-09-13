@@ -123,6 +123,7 @@ class TriggerDistanceAutoTuner(
 
     private fun cooldownOk(nowMs: Long): Boolean {
         val last = lastAdjustAtMs.get()
-        return nowMs - last >= minIntervalMs
+        // 0 表示尚未发生过调整；第一次合法调整不应被启动后的冷却窗口误挡。
+        return last == 0L || nowMs - last >= minIntervalMs
     }
 }
