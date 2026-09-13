@@ -743,7 +743,11 @@ class ShizukuFrameSource @Inject constructor() : FrameSource {
     }
 
     private fun java.lang.Process.destroyCompatLocal() {
-        runCatching { destroyForcibly() }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            runCatching { destroyForcibly() }
+        } else {
+            runCatching { destroy() }
+        }
         runCatching { destroy() }
     }
 

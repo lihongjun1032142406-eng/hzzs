@@ -479,7 +479,11 @@ class VisionRuntimeController @Inject constructor(
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(false)
 
-        notificationManager.notify(SHIZUKU_NOTIFICATION_ID, builder.build())
+        try {
+            notificationManager.notify(SHIZUKU_NOTIFICATION_ID, builder.build())
+        } catch (_: SecurityException) {
+            // Android 13+ 通知权限可能被用户拒绝；该诊断通知为 best-effort。
+        }
     }
 
     /**

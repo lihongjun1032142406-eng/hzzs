@@ -4,7 +4,7 @@ import android.content.pm.PackageManager
 import android.os.SystemClock
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.util.concurrent.TimeUnit
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -192,14 +192,25 @@ object ShellProcessSupport {
     private fun waitForExit(process: Process, timeoutMs: Long): Boolean {
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
         while (SystemClock.elapsedRealtime() < deadline) {
-            val exited = runCatching { process.waitFor(50L, TimeUnit.MILLISECONDS) }.getOrDefault(false)
+            val exited = runCatching {
+                process.exitValue()
+                true
+            }.getOrDefault(false)
             if (exited) return true
+            SystemClock.sleep(50L)
         }
-        return runCatching { process.waitFor(1L, TimeUnit.MILLISECONDS) }.getOrDefault(false)
+        return runCatching {
+            process.exitValue()
+            true
+        }.getOrDefault(false)
     }
 
     private fun Process.destroyCompat() {
-        runCatching { destroyForcibly() }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            runCatching { destroyForcibly() }
+        } else {
+            runCatching { destroy() }
+        }
         runCatching { destroy() }
     }
 

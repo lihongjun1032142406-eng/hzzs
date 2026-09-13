@@ -67,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -224,6 +225,7 @@ fun AboutScreen(
     var versionTapCount by remember { mutableIntStateOf(0) }
     var unlockMessage by remember { mutableStateOf<String?>(null) }
     val toastContext = LocalContext.current
+    val resources = LocalResources.current
     val unlockDoneMsg = stringResource(R.string.about_unlock_done)
 
     LaunchedEffect(config.developer.enabled, developerPage) {
@@ -333,7 +335,7 @@ fun AboutScreen(
                                 val remaining = 7 - versionTapCount
                                 when {
                                     remaining > 0 && remaining <= 3 -> {
-                                        unlockMessage = toastContext.getString(
+                                        unlockMessage = resources.getString(
                                             R.string.about_unlock_remaining,
                                             remaining,
                                         )
@@ -546,6 +548,7 @@ private fun AboutRow(
     url: String? = null,
 ) {
     val context = LocalContext.current
+    val openLinkFailedMessage = stringResource(R.string.about_open_link_failed)
     ListItem(
         leadingContent = { Icon(icon, contentDescription = null) },
         headlineContent = { Text(title) },
@@ -559,7 +562,7 @@ private fun AboutRow(
                     .onFailure {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.about_open_link_failed),
+                            openLinkFailedMessage,
                             Toast.LENGTH_SHORT,
                         ).show()
                     }

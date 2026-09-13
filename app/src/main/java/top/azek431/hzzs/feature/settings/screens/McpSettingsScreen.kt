@@ -709,11 +709,12 @@ fun McpSettingsScreen(
                     subtitle = stringResource(R.string.mcp_access_log_open_full_subtitle),
                     onClick = onOpenAccessLog,
                 )
+                val accessLogClearedMessage = stringResource(R.string.mcp_access_log_cleared)
                 OutlinedButton(
                     onClick = {
                         McpAccessLog.clear()
                         accessLogRevision = McpAccessLog.revision()
-                        onMessage(context.getString(R.string.mcp_access_log_cleared))
+                        onMessage(accessLogClearedMessage)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = accessEntries.isNotEmpty(),
@@ -866,6 +867,7 @@ fun McpSettingsScreen(
     }
 
     if (toolsDialogOpen) {
+        val toolsResetDoneMessage = stringResource(R.string.mcp_tools_reset_done)
         McpToolPolicyDialog(
             toolPolicies = config.mcp.toolPolicies,
             onPolicyChange = { toolName, policy ->
@@ -881,7 +883,7 @@ fun McpSettingsScreen(
             },
             onClearAll = {
                 update { it.copy(mcp = it.mcp.copy(toolPolicies = emptyMap())) }
-                onMessage(context.getString(R.string.mcp_tools_reset_done))
+                onMessage(toolsResetDoneMessage)
             },
             onDismiss = { toolsDialogOpen = false },
         )
