@@ -1,4 +1,7 @@
 #pragma once
+#pragma once
+#include <cstring>
+#include "algorithm_runtime.h"
 #include "algorithm_runtime.h"
 #include "multicolor_detector.h"
 #include "vision_types.h"
