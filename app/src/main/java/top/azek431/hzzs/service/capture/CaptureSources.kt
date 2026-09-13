@@ -15,6 +15,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
+import android.hardware.HardwareBuffer
 import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
@@ -363,12 +364,22 @@ class MediaProjectionCaptureService : Service() {
             "屏幕尺寸无效：${metrics.widthPixels}×${metrics.heightPixels}"
         }
         val handler = requireNotNull(workerHandler) { "截图线程尚未就绪" }
-        val replacement = ImageReader.newInstance(
-            metrics.widthPixels,
-            metrics.heightPixels,
-            PixelFormat.RGBA_8888,
-            3,
-        )
+        val replacement = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ImageReader.newInstance(
+                metrics.widthPixels,
+                metrics.heightPixels,
+                PixelFormat.RGBA_8888,
+                3,
+                HardwareBuffer.USAGE_CPU_READ_OFTEN,
+            )
+        } else {
+            ImageReader.newInstance(
+                metrics.widthPixels,
+                metrics.heightPixels,
+                PixelFormat.RGBA_8888,
+                3,
+            )
+        }
         replacement.setOnImageAvailableListener({ availableReader ->
             availableReader.acquireLatestImage()?.use(source::accept)
         }, handler)
