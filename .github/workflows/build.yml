@@ -38,7 +38,7 @@ jobs:
           bash tools/vision/run_native_sanitizers.sh
           python3 tools/vision/run_host_tests.py
       - name: Unit tests, lint and debug APK
-        run: ./gradlew --no-daemon clean testDebugUnitTest lintDebug assembleDebug
+        run: ./gradlew --no-daemon --continue clean testDebugUnitTest lintDebug assembleDebug
       - uses: actions/upload-artifact@v4
         if: always()
         with:
