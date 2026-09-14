@@ -139,6 +139,20 @@ class JinChanUnitLedgerTest {
         assertRejected({ l, a, _ -> l.merge(listOf(a, 999), "garen", 2, UnitLocation.Bench(0)) }, "MERGE_SOURCE_NOT_FOUND")
         assertRejected({ l, a, b -> l.merge(listOf(a, b), "garen", 2, UnitLocation.Bench(0), resultUid = a) }, "MERGE_RESULT_IS_SOURCE")
         assertRejected({ l, a, b -> l.merge(listOf(a, b), "garen", 4, UnitLocation.Bench(0)) }, "INVALID_STAR")
+        assertRejected(
+            { l, a, b -> l.merge(listOf(a, b), "garen", 2, UnitLocation.Bench(0)) },
+            "MERGE_EQUIVALENT_COPIES_MISMATCH",
+        )
+
+        val unknownStar = JinChanUnitLedger()
+        val unknown = requireNotNull(unknownStar.create("garen", null).uid)
+        val known = requireNotNull(unknownStar.create("garen", 1).uid)
+        val before = unknownStar.snapshot()
+        assertEquals(
+            "MERGE_STAR_AMBIGUOUS",
+            unknownStar.merge(listOf(unknown, known), "garen", 2, UnitLocation.Unknown).reason,
+        )
+        assertEquals(before, unknownStar.snapshot())
     }
 
     @Test

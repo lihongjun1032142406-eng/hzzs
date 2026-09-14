@@ -119,6 +119,13 @@ class JinChanUnitLedger {
         val sources = sourceUids.map { uid -> units[uid] ?: return reject("MERGE_SOURCE_NOT_FOUND") }
         if (sources.any { it.state != UnitLifecycleState.ACTIVE }) return reject("MERGE_SOURCE_NOT_ACTIVE")
 
+        val resultCopies = equivalentCopiesFor(starLevel) ?: return reject("INVALID_STAR")
+        val sourceCopies = sources.map { it.equivalentCopies }
+        if (sourceCopies.any { it == null }) return reject("MERGE_STAR_AMBIGUOUS")
+        if (sourceCopies.sumOf { requireNotNull(it) } != resultCopies) {
+            return reject("MERGE_EQUIVALENT_COPIES_MISMATCH")
+        }
+
         val normalizedHero = normalizeHeroKey(heroKey)
         val knownSourceHeroes = sources.mapNotNull { normalizeHeroKey(it.heroKey) }.distinct()
         if (normalizedHero != null && knownSourceHeroes.any { it != normalizedHero }) return reject("MERGE_HERO_MISMATCH")
