@@ -179,7 +179,6 @@ class DeveloperConfigJsonTest {
                 saveDebugFrames = true,
                 showCoordinateGrid = true,
                 frameRateLimit = 45,
-                nativeBenchmarkIterations = 300,
                 logLevel = AppLogLevel.DEBUG,
             ),
         )
@@ -188,7 +187,6 @@ class DeveloperConfigJsonTest {
         assertEquals(true, decoded.developer.saveDebugFrames)
         assertEquals(true, decoded.developer.showCoordinateGrid)
         assertEquals(45, decoded.developer.frameRateLimit)
-        assertEquals(300, decoded.developer.nativeBenchmarkIterations)
         assertEquals(AppLogLevel.DEBUG, decoded.developer.logLevel)
     }
 
