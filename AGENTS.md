@@ -87,6 +87,10 @@ app/src/test/      JVM 单测 + cpp/native_tests.cpp
 
 ### 主数据流
 
+JinChan H4-A 复用同一帧链路生成 LEVEL/EXP/GOLD 与五槽 Shop typed observation；Shop 只在稳定
+`inGame && SHOP_OPEN` 运行，未知槽不等于空槽，身份只做 GameData canonical/alias exact resolution。
+Gold 保持 best-effort，200 仅为数据集风险过滤值。Board/Bench/Decision/Action 不在 H4-A 范围。
+
 ```text
 FrameSource → VisionRuntimeController（完成驱动取帧；HUD 显示时临时隐身）
   → NativeVisionEngine (JNI)  【算法：只算 Detection 数据，不绘制】
