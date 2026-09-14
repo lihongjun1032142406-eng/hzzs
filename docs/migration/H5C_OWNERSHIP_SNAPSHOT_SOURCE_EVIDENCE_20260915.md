@@ -55,3 +55,10 @@ Safety remains:
 ## Acceptance principle
 
 Given the same ledger snapshot, H5-C must return the same ownership snapshot. UNKNOWN remains UNKNOWN, CONSUMED does not count as current ownership, and the projection never changes ledger revision/state.
+
+## Implemented projection contract
+
+`JinChanOwnershipProjector` accepts either an immutable `UnitLedgerSnapshot` or a `JinChanUnitLedger`. The ledger overload
+captures exactly one snapshot before delegating to the pure projection. Output units are ordered by UID, known-hero totals
+are ordered by hero key, and unknown-star units contribute to unit and unresolved counts without contributing fabricated
+equivalent copies.
