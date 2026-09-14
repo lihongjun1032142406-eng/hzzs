@@ -9,6 +9,8 @@
 
 ## [Unreleased]
 
+- **JinChan H4-A source-evidence gate**：完成 HUD/Shop Kotlin migration contract、同帧 adapter、`SHOP_OPEN` fail-closed gate 与 typed availability 语义；因仓库和迁移输入缺少冻结 M5.8/M6.4/C6A/C6B producer、常量、validator、fixture 与 Hero Identity 数据，状态明确为 `BLOCKED_SOURCE_EVIDENCE`，未猜测阈值、未执行 Shop expensive path，亦未开始 H4-B。
+
 ### 新增
 
 - **JinChan Shadow State（H3）**：在真实 `CapturedFrame` 的同一租约内串联一次 H1 bridge/session runtime 与 H2 的 SHOP/GOLD/LEVEL_EXP/BOARD/BENCH ROI 解析，发布不含像素的 latest-only 只读状态和单调 timing；H4 感知 producer 尚未迁移，五项 observation 当前明确为 `UNKNOWN`，动作路径保持不可达。

@@ -195,7 +195,15 @@ analyze(frame) 只读当前 generation 对应快照
 
 ## JinChan 迁移阶段：H3 Shadow State
 
-当前迁移状态为 **H1 = FROZEN、H2 = FROZEN、H3 Shadow State = CURRENT、H4 Perception Migration = NEXT**。
+当前迁移状态为 **H1 = FROZEN、H2 = FROZEN、H3 = FROZEN、H4-A HUD + Shop = CURRENT、H4-B Board Occupancy = NEXT**。
 H3 在 `VisionRuntimeController` 的同一个 `CapturedFrame.use` 租约内完成一次 H1 bridge、H1 session runtime 接受、H2 的 SHOP/GOLD/LEVEL_EXP/BOARD/BENCH canonical 与 source ROI 解析，并发布 latest-only 的只读 `StateFlow`。Shadow State 仅保存 session、帧序号、方向、ROI 元数据及单调时钟 timing，不保存 pixels、`CapturedFrame` 或 canonical frame。
+
+### H4-A HUD + Shop（CURRENT：BLOCKED_SOURCE_EVIDENCE）
+
+阶段顺序保持 **H1 FROZEN → H2 FROZEN → H3 FROZEN → H4-A CURRENT → H4-B Board Occupancy NEXT**。H4-A 只允许把冻结 JinChan producer 忠实迁移为 Kotlin，不是重新研发或调参；H4-B、Bench、Ledger、Decision 与 Action 均未开始。
+
+`data/jinchan/perception` 已建立 typed `AVAILABLE / UNKNOWN / INVALID / NOT_APPLICABLE` contract 和同步 same-frame adapter。adapter 只借用 H1 canonical frame 及 H2 ROI；不截图、不保存 pixels。Shop gate 只有权威同帧状态同时确认 `inGame == true` 和 `uiState == SHOP_OPEN` 时才可调用 expensive producer，否则为 `UNKNOWN`（gate source 缺失）或 `NOT_APPLICABLE`（gate 明确关闭）。producer 异常被转换为 `INVALID`，不会退出 capture session；UNKNOWN slot 不会隐式变成 EMPTY。
+
+Source inventory 结论：当前仓库 Git 对象、源码、测试与文档中不存在 M5.8 LEVEL/EXP/GOLD recognizer 和 Gold validator，也不存在 M6.4/C6A/C6B `processFrame`、`buildShopPerception`、`shop_frame_perception_v1`、slot/name-band/container geometry、Hero exact-match/alias/GameData policy、冻结常量或 fixture。默认 adapter 因此返回 `BLOCKED_SOURCE_EVIDENCE`；Shop gate 返回 `SHOP_GATE_SOURCE_PENDING` 并保证 expensive producer 不执行。补齐这些权威源码、常量、validator、identity 数据和 fixture 前，禁止实现实际识别或构造假 fixture。
 
 H3 **不表示感知算法已经迁移**：Shop、Gold、Level、Board、Bench 尚无 H4 producer 时明确为 `UNKNOWN`；ROI 无法映射时对应字段为 `INVALID`。真正 HUD / Shop / Board Occupancy / Bench producer 属于 H4。本阶段不新增 recognizer、OCR、Decision、Action 或独立 capture，真实动作路径仍不可达。
