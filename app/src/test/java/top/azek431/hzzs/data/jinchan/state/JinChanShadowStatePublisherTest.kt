@@ -6,7 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import top.azek431.hzzs.data.jinchan.frame.FrameRect
 import top.azek431.hzzs.data.jinchan.frame.JinChanCanonicalFrame
 import top.azek431.hzzs.data.jinchan.roi.JinChanRoiId
 import top.azek431.hzzs.data.jinchan.roi.JinChanRoiRegistry
@@ -24,11 +23,18 @@ class JinChanShadowStatePublisherTest {
         var clock = 20_000L
 
         val state = source.use {
-            publisher.publishFrame(session, source, 10_010, 100, nanoTime = { clock++ }) { id, canonical ->
-                seenIds += id
-                seenFrames += canonical
-                JinChanRoiRegistry.resolveCanonical(id) to JinChanRoiRegistry.resolveSource(id, canonical)
-            }
+            publisher.publishFrame(
+                session,
+                source,
+                10_010,
+                100,
+                nanoTime = { clock++ },
+                roiResolver = { id, canonical ->
+                    seenIds += id
+                    seenFrames += canonical
+                    JinChanRoiRegistry.resolveCanonical(id) to JinChanRoiRegistry.resolveSource(id, canonical)
+                },
+            )
         }
 
         requireNotNull(state)
