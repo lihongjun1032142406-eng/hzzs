@@ -119,13 +119,8 @@ class JinChanUnitLedger {
         val sources = sourceUids.map { uid -> units[uid] ?: return reject("MERGE_SOURCE_NOT_FOUND") }
         if (sources.any { it.state != UnitLifecycleState.ACTIVE }) return reject("MERGE_SOURCE_NOT_ACTIVE")
 
-        val resultCopies = equivalentCopiesFor(starLevel) ?: return reject("INVALID_STAR")
-        val sourceCopies = sources.map { it.equivalentCopies }
-        if (sourceCopies.any { it == null }) return reject("MERGE_STAR_AMBIGUOUS")
-        if (sourceCopies.sumOf { requireNotNull(it) } != resultCopies) {
-            return reject("MERGE_EQUIVALENT_COPIES_MISMATCH")
-        }
-
+        // Validate identity/UID conflicts before equivalent-copy arithmetic so rejected merges report
+        // the most direct structural conflict deterministically without mutating the ledger.
         val normalizedHero = normalizeHeroKey(heroKey)
         val knownSourceHeroes = sources.mapNotNull { normalizeHeroKey(it.heroKey) }.distinct()
         if (normalizedHero != null && knownSourceHeroes.any { it != normalizedHero }) return reject("MERGE_HERO_MISMATCH")
@@ -136,6 +131,13 @@ class JinChanUnitLedger {
         if (uid <= 0L) return reject("INVALID_UID")
         if (uid in sourceUids) return reject("MERGE_RESULT_IS_SOURCE")
         if (units.containsKey(uid)) return reject("DUPLICATE_UID")
+
+        val resultCopies = equivalentCopiesFor(starLevel) ?: return reject("INVALID_STAR")
+        val sourceCopies = sources.map { it.equivalentCopies }
+        if (sourceCopies.any { it == null }) return reject("MERGE_STAR_AMBIGUOUS")
+        if (sourceCopies.sumOf { requireNotNull(it) } != resultCopies) {
+            return reject("MERGE_EQUIVALENT_COPIES_MISMATCH")
+        }
 
         val newRevision = revision + 1
         sourceUids.forEach { sourceUid ->
