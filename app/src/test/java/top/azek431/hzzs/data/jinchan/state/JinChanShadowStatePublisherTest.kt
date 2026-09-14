@@ -10,6 +10,7 @@ import top.azek431.hzzs.data.jinchan.frame.FrameRect
 import top.azek431.hzzs.data.jinchan.frame.JinChanCanonicalFrame
 import top.azek431.hzzs.data.jinchan.roi.JinChanRoiId
 import top.azek431.hzzs.data.jinchan.roi.JinChanRoiRegistry
+import top.azek431.hzzs.data.jinchan.perception.*
 import top.azek431.hzzs.service.capture.CapturedFrame
 
 class JinChanShadowStatePublisherTest {
@@ -38,7 +39,7 @@ class JinChanShadowStatePublisherTest {
         assertEquals(listOf(JinChanRoiId.SHOP, JinChanRoiId.GOLD, JinChanRoiId.LEVEL_EXP, JinChanRoiId.BOARD, JinChanRoiId.BENCH), seenIds)
         assertEquals(5, seenFrames.size)
         seenFrames.forEach { assertSame(seenFrames.first(), it) }
-        listOf(state.shop, state.gold, state.level, state.board, state.bench).forEach {
+        listOf(state.shop, state.gold, state.level, state.exp).forEach {
             assertEquals(ShadowFieldStatus.UNKNOWN, it.status)
             assertTrue(it.canonicalRoi != null)
             assertTrue(it.sourceRoi != null)
@@ -81,16 +82,41 @@ class JinChanShadowStatePublisherTest {
         requireNotNull(state)
         assertEquals(ShadowFieldStatus.INVALID, state.board.status)
         assertEquals("ROI_BOARD_UNMAPPABLE", state.board.reason)
-        listOf(state.shop, state.gold, state.level, state.bench).forEach { assertEquals(ShadowFieldStatus.UNKNOWN, it.status) }
+        listOf(state.shop, state.gold, state.level, state.exp).forEach { assertEquals(ShadowFieldStatus.UNKNOWN, it.status) }
+        assertEquals(ShadowFieldStatus.UNKNOWN, state.bench.status)
     }
 
     @Test
     fun publishedGraphContainsNoLeasePixelsOrActionReferences() {
         val forbidden = setOf(IntArray::class.java, CapturedFrame::class.java, JinChanCanonicalFrame::class.java)
-        val modelClasses = listOf(JinChanShadowState::class.java, JinChanShadowObservation::class.java, JinChanOrientation::class.java, JinChanShadowTiming::class.java)
+        val modelClasses = listOf(JinChanShadowState::class.java, JinChanShadowObservation::class.java, JinChanTypedShadowObservation::class.java, JinChanOrientation::class.java, JinChanShadowTiming::class.java)
         modelClasses.forEach { type -> assertFalse(type.declaredFields.any { it.type in forbidden }) }
         val names = modelClasses.flatMap { type -> type.declaredFields.map { it.type.name } }
         assertFalse(names.any { it.contains("Action", ignoreCase = true) || it.contains("Gesture", ignoreCase = true) })
+    }
+
+    @Test
+    fun hudAndShopSharePublishedFrameAndBoardBenchStayUnknown() {
+        val publisher = JinChanShadowStatePublisher()
+        val session = publisher.startSession()
+        val source = frame(77, 1_000)
+        val seenSequences = mutableListOf<Long>()
+        val texts = ArrayDeque(listOf("8", "4/12", "20", "金蝉", "金蝉", "金蝉", "金蝉", "金蝉"))
+        val state = publisher.publishFrame(
+            session, source, 1_000, 10,
+            ocrReader = JinChanOcrReader { canonical, _ ->
+                seenSequences += canonical.sourceSequence
+                JinChanOcrResult(JinChanOcrStatus.VALID, texts.removeFirst(), .9)
+            },
+            stableState = JinChanStableState(true, JinChanStableUiState.SHOP_OPEN),
+            heroResolver = JinChanHeroIdentityResolver { ResolvedHero(it, it) },
+        )
+        requireNotNull(state)
+        assertTrue(seenSequences.all { it == 77L })
+        assertEquals(77L, state.shop.value?.frameSeq)
+        assertEquals(ShadowFieldStatus.AVAILABLE, state.shop.status)
+        assertEquals(ShadowFieldStatus.UNKNOWN, state.board.status)
+        assertEquals(ShadowFieldStatus.UNKNOWN, state.bench.status)
     }
 
     private fun frame(sequence: Long, timestamp: Long, width: Int = 3_120, height: Int = 1_440) = CapturedFrame(

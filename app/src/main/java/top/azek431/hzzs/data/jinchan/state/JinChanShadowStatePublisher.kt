@@ -14,6 +14,7 @@ import top.azek431.hzzs.data.jinchan.frame.JinChanFrameRuntimeStatus
 import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
 import top.azek431.hzzs.data.jinchan.roi.JinChanRoiId
 import top.azek431.hzzs.data.jinchan.roi.JinChanRoiRegistry
+import top.azek431.hzzs.data.jinchan.perception.*
 import top.azek431.hzzs.service.capture.CapturedFrame
 
 /** Session-scoped same-frame H3 publisher. Calls are synchronous and must stay inside frame.use. */
@@ -48,6 +49,9 @@ class JinChanShadowStatePublisher @Inject constructor() {
         nanoTime: () -> Long = System::nanoTime,
         roiResolver: (JinChanRoiId, JinChanCanonicalFrame) -> Pair<top.azek431.hzzs.data.jinchan.frame.FrameRect, top.azek431.hzzs.data.jinchan.frame.FrameRect?> =
             { id, frame -> JinChanRoiRegistry.resolveCanonical(id) to JinChanRoiRegistry.resolveSource(id, frame) },
+        ocrReader: JinChanOcrReader = UnavailableJinChanOcrReader,
+        stableState: JinChanStableState = JinChanStableState(null, JinChanStableUiState.UNKNOWN),
+        heroResolver: JinChanHeroIdentityResolver? = null,
     ): JinChanShadowState? {
         val totalStart = nanoTime()
         val bridgeStart = nanoTime()
@@ -70,6 +74,13 @@ class JinChanShadowStatePublisher @Inject constructor() {
             }
         }
         val roiNs = elapsed(roiStart, nanoTime())
+        val hud = JinChanHudPerception.observe(canonical, ocrReader)
+        val shopValue = JinChanShopPerception.observe(canonical, stableState, ocrReader, heroResolver)
+        fun <T> typed(id: JinChanRoiId, value: T?, available: Boolean, reason: String? = null): JinChanTypedShadowObservation<T> {
+            val roi = observations.getValue(id)
+            if (roi.status == ShadowFieldStatus.INVALID) return JinChanTypedShadowObservation(ShadowFieldStatus.INVALID, canonicalRoi = roi.canonicalRoi, reason = roi.reason)
+            return JinChanTypedShadowObservation(if (available) ShadowFieldStatus.AVAILABLE else ShadowFieldStatus.UNKNOWN, value, roi.canonicalRoi, roi.sourceRoi, reason)
+        }
         val publishStart = nanoTime()
         // Building the immutable snapshot is the measurable publication work; StateFlow assignment
         // itself is deliberately performed exactly once so observers never see a partial timing.
@@ -79,9 +90,10 @@ class JinChanShadowStatePublisher @Inject constructor() {
             frameSeq = metadata.frameId,
             timestampElapsedRealtimeNanos = metadata.timestampElapsedRealtimeNanos,
             orientation = JinChanOrientation(metadata.sourceWidth, metadata.sourceHeight, metadata.sourceRotationDegrees, metadata.canonicalWidth, metadata.canonicalHeight),
-            shop = observations.getValue(JinChanRoiId.SHOP),
-            gold = observations.getValue(JinChanRoiId.GOLD),
-            level = observations.getValue(JinChanRoiId.LEVEL_EXP),
+            shop = typed(JinChanRoiId.SHOP, shopValue.takeIf { it.status == ShopObservationStatus.AVAILABLE }, shopValue.status == ShopObservationStatus.AVAILABLE, shopValue.reason),
+            gold = typed(JinChanRoiId.GOLD, hud.gold, hud.gold.status != HudObservationStatus.UNAVAILABLE && hud.gold.status != HudObservationStatus.NOT_VISIBLE, hud.gold.reason),
+            level = typed(JinChanRoiId.LEVEL_EXP, hud.level, hud.level.status == HudObservationStatus.AVAILABLE, hud.level.reason),
+            exp = typed(JinChanRoiId.LEVEL_EXP, hud.exp, hud.exp.status == HudObservationStatus.AVAILABLE, hud.exp.reason),
             board = observations.getValue(JinChanRoiId.BOARD),
             bench = observations.getValue(JinChanRoiId.BENCH),
             timing = JinChanShadowTiming(

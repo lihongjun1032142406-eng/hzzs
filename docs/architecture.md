@@ -15,6 +15,7 @@ platform 仅通过接口向运行时暴露能力
 | `domain` | 与 Android 无关的视觉与手势规则（可 JVM 测试） |
 | `data/vision` | 帧循环所有者、JNI 适配、追踪、调试帧 |
 | `data/jinchan/frame` | HZZS 帧到 JinChan 3120×1440 canonical frame 的只读、零拷贝适配与唯一坐标换算层 |
+| `data/jinchan/perception` | H4-A HUD/Shop 冻结几何、ROI stride 读取、验证与 fail-closed typed observation |
 | `feature` | Compose 界面；不直接 Root / Shell / JNI / WindowManager |
 | `service` | 截图后端、悬浮窗、无障碍手势 |
 | `platform/compat` | 版本与能力探测；系统悬浮窗/无障碍/修改系统设置与指针位置（`SystemCapabilityAccess`） |
@@ -193,9 +194,16 @@ analyze(frame) 只读当前 generation 对应快照
 
 `UpdateRepository`：Gitee 优先、GitHub 校验、清单签名、APK / 差分哈希与证书绑定。应用内 UI 负责触发检查与安装跳转。
 
-## JinChan 迁移阶段：H3 Shadow State
+## JinChan 迁移阶段：H4-A HUD + Shop
 
-当前迁移状态为 **H1 = FROZEN、H2 = FROZEN、H3 Shadow State = CURRENT、H4 Perception Migration = NEXT**。
-H3 在 `VisionRuntimeController` 的同一个 `CapturedFrame.use` 租约内完成一次 H1 bridge、H1 session runtime 接受、H2 的 SHOP/GOLD/LEVEL_EXP/BOARD/BENCH canonical 与 source ROI 解析，并发布 latest-only 的只读 `StateFlow`。Shadow State 仅保存 session、帧序号、方向、ROI 元数据及单调时钟 timing，不保存 pixels、`CapturedFrame` 或 canonical frame。
+当前迁移状态为 **H1/H2 = FROZEN、H3 = MERGED、H4-A HUD + Shop = CURRENT**。H3 publisher 在
+`VisionRuntimeController` 的同一个 `CapturedFrame.use` 租约内只做一次 bridge/session accept，H4-A
+producer 复用该 canonical frame 与同一 `frameSeq`。LEVEL/EXP 使用冻结 ROI、edge visibility 与范围
+validator；GOLD 保留 `UNAVAILABLE/RAW_VALID/UNTRUSTED/TRUSTED` 语义，其中 200 仅为观测数据风险
+过滤 ceiling，不是游戏规则上限。所有像素读取均为 ROI stride view，OCR 实现也只允许复制必要 ROI。
 
-H3 **不表示感知算法已经迁移**：Shop、Gold、Level、Board、Bench 尚无 H4 producer 时明确为 `UNKNOWN`；ROI 无法映射时对应字段为 `INVALID`。真正 HUD / Shop / Board Occupancy / Bench producer 属于 H4。本阶段不新增 recognizer、OCR、Decision、Action 或独立 capture，真实动作路径仍不可达。
+Shop 固定保留五个槽和槽内 name band；只在稳定 `inGame == true && uiState == SHOP_OPEN` 时运行。
+G1/G2/G3 不把 `UNKNOWN` 转成 `EMPTY`，英雄名只允许 GameData canonical/alias exact resolution；任何
+exception、PARTIAL、ERROR、NOT_AVAILABLE 或 builder unavailable 均不发布 AVAILABLE Shop。latest-only
+Shadow State 只持有 typed value 与 ROI 元数据，不持有 frame/pixels/action。Board/Bench 仍为 UNKNOWN，
+不接 Decision、GestureDispatcher 或任何真实 Action。

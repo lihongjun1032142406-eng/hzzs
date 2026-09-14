@@ -2,12 +2,24 @@ package top.azek431.hzzs.data.jinchan.state
 
 import top.azek431.hzzs.data.jinchan.frame.FrameRect
 import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
+import top.azek431.hzzs.data.jinchan.perception.ExpObservation
+import top.azek431.hzzs.data.jinchan.perception.GoldObservation
+import top.azek431.hzzs.data.jinchan.perception.LevelObservation
+import top.azek431.hzzs.data.jinchan.perception.ShopObservation
 
 /** Availability of a perception field. UNKNOWN is expected until H4 supplies a producer. */
 enum class ShadowFieldStatus { UNKNOWN, AVAILABLE, INVALID }
 
 data class JinChanShadowObservation(
     val status: ShadowFieldStatus,
+    val canonicalRoi: FrameRect? = null,
+    val sourceRoi: FrameRect? = null,
+    val reason: String? = null,
+)
+
+data class JinChanTypedShadowObservation<T>(
+    val status: ShadowFieldStatus,
+    val value: T? = null,
     val canonicalRoi: FrameRect? = null,
     val sourceRoi: FrameRect? = null,
     val reason: String? = null,
@@ -35,9 +47,10 @@ data class JinChanShadowState(
     val frameSeq: Long,
     val timestampElapsedRealtimeNanos: Long,
     val orientation: JinChanOrientation,
-    val shop: JinChanShadowObservation,
-    val gold: JinChanShadowObservation,
-    val level: JinChanShadowObservation,
+    val shop: JinChanTypedShadowObservation<ShopObservation>,
+    val gold: JinChanTypedShadowObservation<GoldObservation>,
+    val level: JinChanTypedShadowObservation<LevelObservation>,
+    val exp: JinChanTypedShadowObservation<ExpObservation>,
     val board: JinChanShadowObservation,
     val bench: JinChanShadowObservation,
     val timing: JinChanShadowTiming,

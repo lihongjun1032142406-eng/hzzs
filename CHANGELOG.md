@@ -11,6 +11,8 @@
 
 ### 新增
 
+- **JinChan H4-A HUD + Shop**：在 H1/H2/H3 同一帧租约与 `frameSeq` 上迁移 LEVEL/EXP/GOLD typed observation、冻结的五槽 Shop/name-band/content gate 与精确身份解析契约；Gold 保持 best-effort 且只在 clean + ceiling 风险过滤后可信，Shop 仅在稳定 `inGame && SHOP_OPEN` 且完整构建时可用，Board/Bench 与所有动作仍保持不可达。
+
 - **JinChan Shadow State（H3）**：在真实 `CapturedFrame` 的同一租约内串联一次 H1 bridge/session runtime 与 H2 的 SHOP/GOLD/LEVEL_EXP/BOARD/BENCH ROI 解析，发布不含像素的 latest-only 只读状态和单调 timing；H4 感知 producer 尚未迁移，五项 observation 当前明确为 `UNKNOWN`，动作路径保持不可达。
 
 - **JinChan ROI Registry（H2）**：以代码内不可变 `JINCHAN_ROI_V1` 登记 JinChanAI 冻结交接的 10 个 normalized ROI；统一解析到 H1 的 3120×1440 canonical `FrameRect`，source 映射仅委托 H1，且不持有帧/像素、不复制整帧、不接入识别或动作。

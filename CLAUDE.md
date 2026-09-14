@@ -56,6 +56,10 @@ HZZS（火崽崽奇妙屋）是本地 Android 画面分析工具：截图、C++ 
 
 ## 视觉运行时约定
 
+- JinChan H4-A 只在 H1/H2/H3 的同一个 `CapturedFrame` 租约和 `frameSeq` 上生成 HUD/Shop typed
+  observation；Shop 必须满足稳定 `inGame && SHOP_OPEN`，任何 partial/error/builder unavailable
+  fail-closed。Gold 的 200 仅为 dataset risk filter，`RAW_VALID` 不等于可信值；Board/Bench 与动作仍不可达。
+
 - 取帧为**完成驱动**：上一轮分析结束后再 `nextFrame`；不按固定 FPS 主动丢帧（开发者 `frameRateLimit` 字段可保留，但不得假定仍被消费）。
 - MediaProjection 为 CONFLATED + 最新帧；HUD 显示时临时隐身、等一帧提交，并对 MediaProjection/AUTO 排空可能含旧合成层的一帧。
 - 近似轮廓与像素轮廓不得声称已迁移 C++/JNI，除非协议与测试同步落地。

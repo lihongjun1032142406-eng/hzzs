@@ -48,6 +48,10 @@
 
 ## 主要能力
 
+> JinChan 迁移状态：H1/H2 已冻结、H3 已合并，H4-A 已接入同帧 HUD（LEVEL/EXP/GOLD）与
+> fail-closed Shop typed observation；Board/Bench、Decision 与 Action 未启用。Gold 仍为 best-effort，
+> Shop 仅在稳定 `inGame && SHOP_OPEN` 且完整构建时可用。
+
 - 单一 `app` 模块，业务代码按职责分包（Compose + Hilt）。
 - **多赛季**障碍配置，共用视口比例坐标；首次安装默认赛季**只**由源码 `AppConfig.DEFAULT_SELECTED_SCENE` 决定（文档不写死赛季名）。
 - 默认识别当前赛季可用障碍类别，可按赛季关闭具体类别。
