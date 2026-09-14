@@ -91,7 +91,16 @@ class JinChanShadowStatePublisher @Inject constructor() {
                 lastTrustedBoard = boardEvaluation
                 JinChanTypedShadowObservation(ShadowFieldStatus.AVAILABLE, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation.reason)
             }
-            lastTrustedBoard != null -> JinChanTypedShadowObservation(ShadowFieldStatus.AVAILABLE, lastTrustedBoard, boardRoi.canonicalRoi, boardRoi.sourceRoi, "HOLD_${boardEvaluation?.reason ?: "UNAVAILABLE"}")
+            lastTrustedBoard != null -> {
+                val holdReason = boardEvaluation?.reason ?: "UNAVAILABLE"
+                val heldForCurrentFrame = requireNotNull(lastTrustedBoard).copy(
+                    frameSeq = canonical.sourceSequence,
+                    decision = BoardSnapshotDecision.HOLD,
+                    reason = holdReason,
+                    timing = null,
+                )
+                JinChanTypedShadowObservation(ShadowFieldStatus.AVAILABLE, heldForCurrentFrame, boardRoi.canonicalRoi, boardRoi.sourceRoi, "HOLD_$holdReason")
+            }
             boardEvaluation?.status == BoardObservationStatus.INVALID -> JinChanTypedShadowObservation(ShadowFieldStatus.INVALID, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation.reason)
             else -> JinChanTypedShadowObservation(ShadowFieldStatus.UNKNOWN, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation?.reason)
         }
