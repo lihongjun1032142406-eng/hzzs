@@ -62,6 +62,19 @@ session、帧序号单调性及调用方传入的 elapsed-realtime stale timeout
 方向、frame id 与 timestamp，不保存 canonical frame 或池化 `IntArray`，因此原租约关闭后没有
 悬挂像素引用，也没有持续整帧复制。
 
+### JinChan ROI Registry（H2）
+
+阶段状态：**H1 Frame Bridge + Runtime 已冻结；H2 ROI Registry 为当前阶段；H3 Shadow State
+是下一阶段，尚未开始。** `JinChanRoiRegistry` 是 normalized ROI 定义的唯一权威来源，版本为
+`JINCHAN_ROI_V1`，值原样迁自 JinChanAI frozen normalized ROI baseline，并非 HZZS 旧算法数据。
+Registry 当前只含 STAGE、LEVEL_EXP、GOLD、BOARD、SHOP、PLAYER_LIST、PANEL、SPECIAL、
+BENCH、PLAY_BTN 十项，不登记子 ROI。
+
+Registry 复用 H1 canonical 尺寸常量，把 normalized geometry 解析为 canonical `FrameRect`；
+canonical→source 必须调用 `JinChanCanonicalFrame.canonicalToSource`，不得复制 rotation/scaling
+公式。Registry 不缓存 frame、不保存 pixels、不复制整帧；同一租约作用域内可为同一 canonical
+frame 解析多个 ROI，但 H2 不发起 capture，也不包含 Recognizer、State、Decision、Overlay 或 Action。
+
 ## 配置
 
 DataStore 存储 schema **v9**（含 `automation.gestureBackend`、`mcp.toolPolicies`、`mcp.accessLogEnabled`）。`SettingsRepository` 以已保存配置为真相源，仍保留进程内 preview 层（引导/外部预览可用）。
