@@ -3,6 +3,7 @@ package top.azek431.hzzs.data.jinchan.state
 import top.azek431.hzzs.data.jinchan.frame.FrameRect
 import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
 import top.azek431.hzzs.data.jinchan.perception.BoardOccupancyObservation
+import top.azek431.hzzs.data.jinchan.perception.BenchObservation
 import top.azek431.hzzs.data.jinchan.perception.ExpObservation
 import top.azek431.hzzs.data.jinchan.perception.GoldObservation
 import top.azek431.hzzs.data.jinchan.perception.LevelObservation
@@ -53,6 +54,6 @@ data class JinChanShadowState(
     val level: JinChanTypedShadowObservation<LevelObservation>,
     val exp: JinChanTypedShadowObservation<ExpObservation>,
     val board: JinChanTypedShadowObservation<BoardOccupancyObservation>,
-    val bench: JinChanShadowObservation,
+    val bench: JinChanTypedShadowObservation<BenchObservation>,
     val timing: JinChanShadowTiming,
 )

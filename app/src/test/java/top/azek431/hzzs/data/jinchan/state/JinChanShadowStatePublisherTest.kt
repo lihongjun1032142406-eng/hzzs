@@ -50,6 +50,9 @@ class JinChanShadowStatePublisherTest {
             assertTrue(it.canonicalRoi != null)
             assertTrue(it.sourceRoi != null)
         }
+        assertEquals(ShadowFieldStatus.UNKNOWN, state.bench.status)
+        assertEquals(BenchObservationStatus.UNAVAILABLE, state.bench.value?.status)
+        assertEquals(123L, state.bench.value?.frameSeq)
         assertSame(state, publisher.state.value)
         assertTrue(state.timing.captureTimestamp == source.elapsedRealtimeNanos)
         listOf(state.timing.bridgeNs, state.timing.roiResolveNs, state.timing.shadowPublishNs, state.timing.totalShadowNs).forEach { assertTrue(it >= 0) }
@@ -95,7 +98,7 @@ class JinChanShadowStatePublisherTest {
     @Test
     fun publishedGraphContainsNoLeasePixelsOrActionReferences() {
         val forbidden = setOf(IntArray::class.java, CapturedFrame::class.java, JinChanCanonicalFrame::class.java)
-        val modelClasses = listOf(JinChanShadowState::class.java, JinChanShadowObservation::class.java, JinChanTypedShadowObservation::class.java, JinChanOrientation::class.java, JinChanShadowTiming::class.java, BoardOccupancyObservation::class.java, BoardCellObservation::class.java)
+        val modelClasses = listOf(JinChanShadowState::class.java, JinChanShadowObservation::class.java, JinChanTypedShadowObservation::class.java, JinChanOrientation::class.java, JinChanShadowTiming::class.java, BoardOccupancyObservation::class.java, BoardCellObservation::class.java, BenchObservation::class.java, BenchSlotObservation::class.java)
         modelClasses.forEach { type -> assertFalse(type.declaredFields.any { it.type in forbidden }) }
         val names = modelClasses.flatMap { type -> type.declaredFields.map { it.type.name } }
         assertFalse(names.any { it.contains("Action", ignoreCase = true) || it.contains("Gesture", ignoreCase = true) })
@@ -163,6 +166,39 @@ class JinChanShadowStatePublisherTest {
         assertEquals(firstBoard.occupiedCount, heldBoard.occupiedCount)
         assertEquals(100L, firstBoard.frameSeq)
         assertEquals(BoardSnapshotDecision.SET, firstBoard.decision)
+    }
+
+    @Test
+    fun injectedBenchUsesCurrentFrameAndSessionResetRetainsNothing() {
+        val publisher = JinChanShadowStatePublisher()
+        val firstSession = publisher.startSession()
+        val evidence = StructuredBenchEvidence(
+            available = true,
+            slotCount = 2,
+            slots = listOf(
+                StructuredBenchSlotEvidence(0, StructuredBenchContentType.EMPTY),
+                StructuredBenchSlotEvidence(1, StructuredBenchContentType.HERO, "金蝉", 2),
+            ),
+        )
+        val first = publisher.publishFrame(
+            firstSession, frame(40, 400), 400, 10,
+            heroResolver = JinChanHeroIdentityResolver { ResolvedHero(it, it) },
+            benchEvidence = evidence,
+        )
+        requireNotNull(first)
+        assertEquals(ShadowFieldStatus.AVAILABLE, first.bench.status)
+        assertEquals(BenchObservationStatus.COMPLETE, first.bench.value?.status)
+        assertEquals(40L, first.bench.value?.frameSeq)
+
+        publisher.stopSession(firstSession)
+        assertNull(publisher.state.value)
+        val secondSession = publisher.startSession()
+        val second = publisher.publishFrame(secondSession, frame(41, 410), 410, 10)
+        requireNotNull(second)
+        assertEquals(ShadowFieldStatus.UNKNOWN, second.bench.status)
+        assertEquals(BenchObservationStatus.UNAVAILABLE, second.bench.value?.status)
+        assertEquals(41L, second.bench.value?.frameSeq)
+        assertEquals(emptyList<BenchSlotObservation>(), second.bench.value?.slots)
     }
 
     private fun frame(sequence: Long, timestamp: Long, width: Int = 3_120, height: Int = 1_440) = CapturedFrame(

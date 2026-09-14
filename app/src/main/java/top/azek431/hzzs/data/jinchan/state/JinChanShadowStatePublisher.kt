@@ -55,6 +55,7 @@ class JinChanShadowStatePublisher @Inject constructor() {
         ocrReader: JinChanOcrReader = UnavailableJinChanOcrReader,
         stableState: JinChanStableState = JinChanStableState(null, JinChanStableUiState.UNKNOWN),
         heroResolver: JinChanHeroIdentityResolver? = null,
+        benchEvidence: StructuredBenchEvidence? = null,
     ): JinChanShadowState? {
         val totalStart = nanoTime()
         val bridgeStart = nanoTime()
@@ -104,6 +105,14 @@ class JinChanShadowStatePublisher @Inject constructor() {
             boardEvaluation?.status == BoardObservationStatus.INVALID -> JinChanTypedShadowObservation(ShadowFieldStatus.INVALID, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation.reason)
             else -> JinChanTypedShadowObservation(ShadowFieldStatus.UNKNOWN, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation?.reason)
         }
+        val benchRoi = observations.getValue(JinChanRoiId.BENCH)
+        val benchValue = JinChanStructuredBenchAdapter.adapt(canonical.sourceSequence, benchEvidence, heroResolver)
+        val bench = when {
+            benchRoi.status == ShadowFieldStatus.INVALID -> JinChanTypedShadowObservation<BenchObservation>(ShadowFieldStatus.INVALID, canonicalRoi = benchRoi.canonicalRoi, reason = benchRoi.reason)
+            benchValue.status == BenchObservationStatus.INVALID -> JinChanTypedShadowObservation(ShadowFieldStatus.INVALID, benchValue, benchRoi.canonicalRoi, benchRoi.sourceRoi, benchValue.reason)
+            benchValue.status == BenchObservationStatus.COMPLETE || benchValue.status == BenchObservationStatus.PARTIAL -> JinChanTypedShadowObservation(ShadowFieldStatus.AVAILABLE, benchValue, benchRoi.canonicalRoi, benchRoi.sourceRoi, benchValue.reason)
+            else -> JinChanTypedShadowObservation(ShadowFieldStatus.UNKNOWN, benchValue, benchRoi.canonicalRoi, benchRoi.sourceRoi, benchValue.reason)
+        }
         fun <T> typed(id: JinChanRoiId, value: T?, available: Boolean, reason: String? = null): JinChanTypedShadowObservation<T> {
             val roi = observations.getValue(id)
             if (roi.status == ShadowFieldStatus.INVALID) return JinChanTypedShadowObservation(ShadowFieldStatus.INVALID, canonicalRoi = roi.canonicalRoi, reason = roi.reason)
@@ -123,7 +132,7 @@ class JinChanShadowStatePublisher @Inject constructor() {
             level = typed(JinChanRoiId.LEVEL_EXP, hud.level, hud.level.status == HudObservationStatus.AVAILABLE, hud.level.reason),
             exp = typed(JinChanRoiId.LEVEL_EXP, hud.exp, hud.exp.status == HudObservationStatus.AVAILABLE, hud.exp.reason),
             board = board,
-            bench = observations.getValue(JinChanRoiId.BENCH),
+            bench = bench,
             timing = JinChanShadowTiming(
                 source.elapsedRealtimeNanos,
                 bridgeNs,
