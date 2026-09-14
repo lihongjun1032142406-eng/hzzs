@@ -102,11 +102,11 @@ class McpProtocolTest {
         assertTrue(McpToolCatalog.tools.any { it.name == "set_developer_enabled" })
         assertTrue(McpToolCatalog.tools.any { it.name == "get_mcp_status" })
         assertTrue(McpToolCatalog.tools.any { it.name == "set_mcp_tool_policy" })
-        assertTrue(McpToolCatalog.resources.any { it.uri == "app://runtime/snapshot" })
+        assertTrue(McpToolCatalog.resources.none { it.uri == "app://runtime/snapshot" })
         assertTrue(McpToolCatalog.resources.any { it.uri == "app://mcp/status" })
         assertNotNull(McpToolCatalog.tool("get_status"))
         assertEquals(null, McpToolCatalog.tool("arm_automation"))
-        assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("download_algorithm")!!.risk)
+        assertEquals(null, McpToolCatalog.tool("download_algorithm"))
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("set_automation_enabled")!!.risk)
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("set_mcp_enabled")!!.risk)
         assertTrue(

@@ -176,7 +176,7 @@ class McpSettingsPatchTest {
         ).forEach { assertTrue("$it missing", names.contains(it)) }
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("get_debug_frame")!!.risk)
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("capture_debug_frame")!!.risk)
-        assertTrue(McpToolCatalog.resources.any { it.uri == "app://runtime/snapshot" })
+        assertTrue(McpToolCatalog.resources.none { it.uri == "app://runtime/snapshot" })
         assertTrue(McpToolCatalog.resources.any { it.uri == "app://mcp/status" })
         assertTrue(McpToolCatalog.resources.any { it.uri == "app://events" })
         // 每个工具都有中文标题（不得回退成纯工具名）
