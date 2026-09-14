@@ -192,3 +192,10 @@ analyze(frame) 只读当前 generation 对应快照
 ## 更新
 
 `UpdateRepository`：Gitee 优先、GitHub 校验、清单签名、APK / 差分哈希与证书绑定。应用内 UI 负责触发检查与安装跳转。
+
+## JinChan 迁移阶段：H3 Shadow State
+
+当前迁移状态为 **H1 = FROZEN、H2 = FROZEN、H3 Shadow State = CURRENT、H4 Perception Migration = NEXT**。
+H3 在 `VisionRuntimeController` 的同一个 `CapturedFrame.use` 租约内完成一次 H1 bridge、H1 session runtime 接受、H2 的 SHOP/GOLD/LEVEL_EXP/BOARD/BENCH canonical 与 source ROI 解析，并发布 latest-only 的只读 `StateFlow`。Shadow State 仅保存 session、帧序号、方向、ROI 元数据及单调时钟 timing，不保存 pixels、`CapturedFrame` 或 canonical frame。
+
+H3 **不表示感知算法已经迁移**：Shop、Gold、Level、Board、Bench 尚无 H4 producer 时明确为 `UNKNOWN`；ROI 无法映射时对应字段为 `INVALID`。真正 HUD / Shop / Board Occupancy / Bench producer 属于 H4。本阶段不新增 recognizer、OCR、Decision、Action 或独立 capture，真实动作路径仍不可达。

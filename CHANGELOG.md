@@ -11,6 +11,8 @@
 
 ### 新增
 
+- **JinChan Shadow State（H3）**：在真实 `CapturedFrame` 的同一租约内串联一次 H1 bridge/session runtime 与 H2 的 SHOP/GOLD/LEVEL_EXP/BOARD/BENCH ROI 解析，发布不含像素的 latest-only 只读状态和单调 timing；H4 感知 producer 尚未迁移，五项 observation 当前明确为 `UNKNOWN`，动作路径保持不可达。
+
 - **JinChan ROI Registry（H2）**：以代码内不可变 `JINCHAN_ROI_V1` 登记 JinChanAI 冻结交接的 10 个 normalized ROI；统一解析到 H1 的 3120×1440 canonical `FrameRect`，source 映射仅委托 H1，且不持有帧/像素、不复制整帧、不接入识别或动作。
 - **JinChan Frame Bridge + Runtime（H1）**：增加 HZZS `CapturedFrame` 到固定 3120×1440 landscape canonical frame 的只读零拷贝适配，保留帧序号/时间戳/租约所有权，并集中提供 source↔canonical 点/矩形坐标换算；轻量 runtime 只缓存无像素的 latest metadata，提供 session 隔离、乱序拒绝和调用方参数化 stale 检查；不包含 ROI、识别、Decision 或 Action。
 - **MCP 工具链增强（9 向能力）**：`inspect` 一键聚合诊断；`patch_settings` 支持 `operations`（set/add/remove/toggle）；命名 profile CRUD（`save/load/list/delete_profile`）；`get_debug_frame` / `capture_debug_frame`（HIGH_RISK，路径穿越防护 + maxWidth 64..1080）；`get_version` / `check_update`（严格 wifiOnly）/ `get_metrics`；进程内 `McpEventBus` + `get_events` / `app://events`；`upgrade_algorithms`（dryRun 无副作用，真升级顺序队列）。安全：profile load 走 `hardenedForExternalIngest`；事件不记 Token/参数。
