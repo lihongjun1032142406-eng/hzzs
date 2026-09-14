@@ -31,7 +31,7 @@ object JinChanShopPerception {
         return try {
             val slots = SLOT_RECTS.mapIndexed { index, normalized ->
                 val slot = normalized.toCanonical()
-                val band = slot.nameBand()
+                val band = slot.resolveNameBand()
                 val result = ocr.read(frame, band)
                 if (result.status in setOf(JinChanOcrStatus.PARTIAL, JinChanOcrStatus.ERROR, JinChanOcrStatus.NOT_AVAILABLE)) {
                     return ShopObservation(ShopObservationStatus.UNAVAILABLE, frame.sourceSequence, reason = "SHOP_OCR_${result.status}")
@@ -83,8 +83,8 @@ object JinChanShopPerception {
         x * JinChanFrameBridge.CANONICAL_WIDTH, y * JinChanFrameBridge.CANONICAL_HEIGHT,
         (x + width) * JinChanFrameBridge.CANONICAL_WIDTH, (y + height) * JinChanFrameBridge.CANONICAL_HEIGHT,
     )
-    fun nameBand(slot: FrameRect): FrameRect = slot.nameBand()
-    private fun FrameRect.nameBand(): FrameRect {
+    fun nameBand(slot: FrameRect): FrameRect = slot.resolveNameBand()
+    private fun FrameRect.resolveNameBand(): FrameRect {
         val height = bottom - top
         return FrameRect(left, top + height * NAME_BAND.y, right, top + height * (NAME_BAND.y + NAME_BAND.height))
     }
