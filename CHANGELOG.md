@@ -11,6 +11,8 @@
 
 ### 新增
 
+- **JinChan H4-B Board Occupancy**：在 H1/H2/H3/H4-A 同一帧租约上接入冻结的 4×7 `HEX_V2_FROZEN` 几何、V8 120 维占用模型、Scene Truth Gate 与 Banner/Damage 污染门控；发布 pixel-free typed Board observation 并保持 SET/HOLD/CLEAR，UNKNOWN 不伪装为空。Bench、Board Identity、Decision 与 Action 仍未启用。
+
 - **JinChan H4-A HUD + Shop**：在 H1/H2/H3 同一帧租约与 `frameSeq` 上迁移 LEVEL/EXP/GOLD typed observation、冻结的五槽 Shop/name-band/content gate 与精确身份解析契约；Gold 保持 best-effort 且只在 clean + ceiling 风险过滤后可信，Shop 仅在稳定 `inGame && SHOP_OPEN` 且完整构建时可用，Board/Bench 与所有动作仍保持不可达。
 
 - **JinChan Shadow State（H3）**：在真实 `CapturedFrame` 的同一租约内串联一次 H1 bridge/session runtime 与 H2 的 SHOP/GOLD/LEVEL_EXP/BOARD/BENCH ROI 解析，发布不含像素的 latest-only 只读状态和单调 timing；H4 感知 producer 尚未迁移，五项 observation 当前明确为 `UNKNOWN`，动作路径保持不可达。

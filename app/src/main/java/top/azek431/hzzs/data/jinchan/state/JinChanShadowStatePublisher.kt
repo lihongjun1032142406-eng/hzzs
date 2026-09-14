@@ -23,12 +23,14 @@ class JinChanShadowStatePublisher @Inject constructor() {
     private val runtime = JinChanFrameRuntime()
     private val mutableState = MutableStateFlow<JinChanShadowState?>(null)
     private var activeSessionId: JinChanFrameSessionId? = null
+    private var lastTrustedBoard: BoardOccupancyObservation? = null
     val state: StateFlow<JinChanShadowState?> = mutableState.asStateFlow()
 
     @Synchronized
     fun startSession(): JinChanFrameSessionId = runtime.startSession().also {
         activeSessionId = it
         mutableState.value = null
+        lastTrustedBoard = null
     }
 
     @Synchronized
@@ -37,6 +39,7 @@ class JinChanShadowStatePublisher @Inject constructor() {
         runtime.stopSession(sessionId)
         activeSessionId = null
         mutableState.value = null
+        lastTrustedBoard = null
     }
 
     /** Adapts exactly once and retains only immutable metadata after this call returns. */
@@ -76,6 +79,22 @@ class JinChanShadowStatePublisher @Inject constructor() {
         val roiNs = elapsed(roiStart, nanoTime())
         val hud = JinChanHudPerception.observe(canonical, ocrReader)
         val shopValue = JinChanShopPerception.observe(canonical, stableState, ocrReader, heroResolver)
+        val boardRoi = observations.getValue(JinChanRoiId.BOARD)
+        val boardEvaluation = if (boardRoi.status == ShadowFieldStatus.INVALID) null else JinChanBoardOccupancyProducer.evaluate(canonical, stableState)
+        val board = when {
+            boardRoi.status == ShadowFieldStatus.INVALID -> JinChanTypedShadowObservation<BoardOccupancyObservation>(ShadowFieldStatus.INVALID, canonicalRoi = boardRoi.canonicalRoi, reason = boardRoi.reason)
+            stableState.inGame == false -> {
+                lastTrustedBoard = null
+                JinChanTypedShadowObservation(ShadowFieldStatus.UNKNOWN, value = BoardOccupancyObservation(BoardObservationStatus.UNAVAILABLE, canonical.sourceSequence, BoardSnapshotDecision.CLEAR, "OUT_OF_GAME"), canonicalRoi = boardRoi.canonicalRoi, sourceRoi = boardRoi.sourceRoi, reason = "OUT_OF_GAME")
+            }
+            boardEvaluation?.status == BoardObservationStatus.AVAILABLE -> {
+                lastTrustedBoard = boardEvaluation
+                JinChanTypedShadowObservation(ShadowFieldStatus.AVAILABLE, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation.reason)
+            }
+            lastTrustedBoard != null -> JinChanTypedShadowObservation(ShadowFieldStatus.AVAILABLE, lastTrustedBoard, boardRoi.canonicalRoi, boardRoi.sourceRoi, "HOLD_${boardEvaluation?.reason ?: "UNAVAILABLE"}")
+            boardEvaluation?.status == BoardObservationStatus.INVALID -> JinChanTypedShadowObservation(ShadowFieldStatus.INVALID, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation.reason)
+            else -> JinChanTypedShadowObservation(ShadowFieldStatus.UNKNOWN, boardEvaluation, boardRoi.canonicalRoi, boardRoi.sourceRoi, boardEvaluation?.reason)
+        }
         fun <T> typed(id: JinChanRoiId, value: T?, available: Boolean, reason: String? = null): JinChanTypedShadowObservation<T> {
             val roi = observations.getValue(id)
             if (roi.status == ShadowFieldStatus.INVALID) return JinChanTypedShadowObservation(ShadowFieldStatus.INVALID, canonicalRoi = roi.canonicalRoi, reason = roi.reason)
@@ -94,7 +113,7 @@ class JinChanShadowStatePublisher @Inject constructor() {
             gold = typed(JinChanRoiId.GOLD, hud.gold, hud.gold.status != HudObservationStatus.UNAVAILABLE && hud.gold.status != HudObservationStatus.NOT_VISIBLE, hud.gold.reason),
             level = typed(JinChanRoiId.LEVEL_EXP, hud.level, hud.level.status == HudObservationStatus.AVAILABLE, hud.level.reason),
             exp = typed(JinChanRoiId.LEVEL_EXP, hud.exp, hud.exp.status == HudObservationStatus.AVAILABLE, hud.exp.reason),
-            board = observations.getValue(JinChanRoiId.BOARD),
+            board = board,
             bench = observations.getValue(JinChanRoiId.BENCH),
             timing = JinChanShadowTiming(
                 source.elapsedRealtimeNanos,

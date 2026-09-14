@@ -48,8 +48,8 @@
 
 ## 主要能力
 
-> JinChan 迁移状态：H1/H2 已冻结、H3 已合并，H4-A 已接入同帧 HUD（LEVEL/EXP/GOLD）与
-> fail-closed Shop typed observation；Board/Bench、Decision 与 Action 未启用。Gold 仍为 best-effort，
+> JinChan 迁移状态：H1/H2/H3/H4-A 已冻结，H4-B 已接入同帧 Board Occupancy typed observation、
+> Scene Truth Gate 与污染门控；Board Identity、Bench、Decision 与 Action 未启用。Gold 仍为 best-effort，
 > Shop 仅在稳定 `inGame && SHOP_OPEN` 且完整构建时可用。
 
 - 单一 `app` 模块，业务代码按职责分包（Compose + Hilt）。

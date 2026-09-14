@@ -40,7 +40,7 @@ data class JinChanHudObservation(val frameSeq: Long, val level: LevelObservation
 
 enum class ShopContentType { HERO_CARD, EMPTY, NON_HERO, UNKNOWN }
 enum class ShopObservationStatus { UNAVAILABLE, AVAILABLE }
-enum class JinChanStableUiState { SHOP_OPEN, OTHER, UNKNOWN }
+enum class JinChanStableUiState { SHOP_OPEN, BOARD_OR_COMBAT, OTHER, UNKNOWN }
 data class JinChanStableState(val inGame: Boolean?, val uiState: JinChanStableUiState)
 data class ResolvedHero(val canonicalId: String, val canonicalName: String)
 

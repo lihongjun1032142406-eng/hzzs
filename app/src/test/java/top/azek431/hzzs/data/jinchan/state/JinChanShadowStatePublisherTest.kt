@@ -95,7 +95,7 @@ class JinChanShadowStatePublisherTest {
     @Test
     fun publishedGraphContainsNoLeasePixelsOrActionReferences() {
         val forbidden = setOf(IntArray::class.java, CapturedFrame::class.java, JinChanCanonicalFrame::class.java)
-        val modelClasses = listOf(JinChanShadowState::class.java, JinChanShadowObservation::class.java, JinChanTypedShadowObservation::class.java, JinChanOrientation::class.java, JinChanShadowTiming::class.java)
+        val modelClasses = listOf(JinChanShadowState::class.java, JinChanShadowObservation::class.java, JinChanTypedShadowObservation::class.java, JinChanOrientation::class.java, JinChanShadowTiming::class.java, BoardOccupancyObservation::class.java, BoardCellObservation::class.java)
         modelClasses.forEach { type -> assertFalse(type.declaredFields.any { it.type in forbidden }) }
         val names = modelClasses.flatMap { type -> type.declaredFields.map { it.type.name } }
         assertFalse(names.any { it.contains("Action", ignoreCase = true) || it.contains("Gesture", ignoreCase = true) })
