@@ -118,7 +118,6 @@ fun SettingsScreen(
         val dest = when (target) {
             SettingsRoutes.HOME, "home" -> SettingsRoutes.HOME
             SettingsRoutes.LOG_VIEWER, "logs", "log" -> SettingsRoutes.LOG_VIEWER
-            SettingsRoutes.ALGORITHM_PIPELINE, "pipeline" -> SettingsRoutes.ALGORITHM_PIPELINE
             SettingsRoutes.MCP_ACCESS_LOG, "mcp_log", "access_log" -> SettingsRoutes.MCP_ACCESS_LOG
             else -> SettingsCategory.entries.firstOrNull { it.route == target }?.route
         }
@@ -148,8 +147,7 @@ fun SettingsScreen(
         if (!config.developer.enabled &&
             (
                 route == SettingsCategory.DEVELOPER.route ||
-                    route == SettingsRoutes.LOG_VIEWER ||
-                    route == SettingsRoutes.ALGORITHM_PIPELINE
+                    route == SettingsRoutes.LOG_VIEWER
                 )
         ) {
             nav.popBackStack(SettingsRoutes.HOME, inclusive = false)

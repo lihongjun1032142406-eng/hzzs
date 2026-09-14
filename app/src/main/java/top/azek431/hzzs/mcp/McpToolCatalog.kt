@@ -295,7 +295,7 @@ object McpToolCatalog {
         ),
         McpToolDescriptor(
             name = "get_metrics",
-            description = "运行时指标：内存（Runtime）+ 帧（fps/processingMs 滑动窗口）+ 进程 uptime",
+            description = "运行时指标：内存（Runtime）+ 帧率（fps 滑动窗口）+ 进程 uptime",
             risk = McpToolRisk.READ,
             inputSchema = emptyObjectSchema(),
         ),
@@ -389,9 +389,6 @@ object McpToolCatalog {
                     .put("showCoordinateGrid", boolProp("坐标网格"))
                     .put("frameRateLimit", intProp("保留字段"))
                     .put("logRingCapacity", intProp("AppLog ring 容量 [500,3000]"))
-                    .put("enableStageTiming", boolProp("阶段耗时细分"))
-                    .put("enableMulticolorDiagnostic", boolProp("多点找色诊断"))
-                    .put("enableFilterTrace", boolProp("过滤原因追踪"))
                     .put("forceCaptureBackend", stringProp("强制截图后端；空字符串清除"))
                     .put("persist", boolProp("是否永久保存（默认 true）")),
             ),
@@ -612,7 +609,6 @@ object McpToolCatalog {
 
     val resources: List<McpResourceDescriptor> = listOf(
         McpResourceDescriptor("app://status", "status", "当前运行状态"),
-        McpResourceDescriptor("app://runtime/snapshot", "runtime/snapshot", "运行态 + Clean Base 标记 + 门闩聚合"),
         McpResourceDescriptor("app://settings/schema", "settings/schema", "设置 schema 摘要"),
         McpResourceDescriptor("app://settings/current", "settings/current", "当前完整设置"),
         McpResourceDescriptor("app://runtime/metrics", "runtime/metrics", "运行指标"),

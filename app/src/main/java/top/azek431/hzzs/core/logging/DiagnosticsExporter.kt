@@ -179,12 +179,8 @@ object DiagnosticsExporter {
             appendLine(
                 "developer.frameRateLimit=${config.developer.frameRateLimit} (field retained; not consumed by completion-driven loop)",
             )
-            appendLine("developer.nativeBenchmarkIterations=${config.developer.nativeBenchmarkIterations}")
             appendLine("developer.logLevel=${config.developer.logLevel.name}")
             appendLine("developer.logRingCapacity=${config.developer.logRingCapacity}")
-            appendLine("developer.enableStageTiming=${config.developer.enableStageTiming}")
-            appendLine("developer.enableMulticolorDiagnostic=${config.developer.enableMulticolorDiagnostic}")
-            appendLine("developer.enableFilterTrace=${config.developer.enableFilterTrace}")
             // 系统指针位置不进 AppConfig；只读当前系统/Shizuku 状态便于真机对照。
             if (appContext != null) {
                 appendLine(

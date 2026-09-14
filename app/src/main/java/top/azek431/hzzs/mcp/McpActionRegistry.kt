@@ -73,7 +73,6 @@ class McpActionRegistry @Inject constructor(
 
     override suspend fun readResource(uri: String): JSONObject = when (uri) {
         "app://status" -> runtime.status.value.toJson()
-        "app://runtime/snapshot" -> runtimeSnapshot()
         "app://settings/current" -> JSONObject(settings.exportJsonRedacted(settings.current()))
         "app://settings/schema" -> settingsSchema()
         "app://runtime/metrics" -> runtime.status.value.toJson()
