@@ -15,7 +15,7 @@ platform 仅通过接口向运行时暴露能力
 | `domain` | 与 Android 无关的视觉与手势规则（可 JVM 测试） |
 | `data/vision` | 帧循环所有者、JNI 适配、追踪、调试帧 |
 | `data/jinchan/frame` | HZZS 帧到 JinChan 3120×1440 canonical frame 的只读、零拷贝适配与唯一坐标换算层 |
-| `data/jinchan/perception` | H4-A HUD/Shop 冻结几何、ROI stride 读取、验证与 fail-closed typed observation |
+| `data/jinchan/perception` | H4-A HUD/Shop 与 H4-B Board Occupancy 冻结几何、同帧像素读取、Scene/污染门控及 fail-closed typed observation |
 | `feature` | Compose 界面；不直接 Root / Shell / JNI / WindowManager |
 | `service` | 截图后端、悬浮窗、无障碍手势 |
 | `platform/compat` | 版本与能力探测；系统悬浮窗/无障碍/修改系统设置与指针位置（`SystemCapabilityAccess`） |
@@ -65,8 +65,8 @@ session、帧序号单调性及调用方传入的 elapsed-realtime stale timeout
 
 ### JinChan ROI Registry（H2）
 
-阶段状态：**H1 Frame Bridge + Runtime 已冻结；H2 ROI Registry 为当前阶段；H3 Shadow State
-是下一阶段，尚未开始。** `JinChanRoiRegistry` 是 normalized ROI 定义的唯一权威来源，版本为
+阶段状态：**H1 Frame Bridge + Runtime、H2 ROI Registry、H3 Shadow State、H4-A HUD/Shop 与
+H4-B Board Occupancy 已迁移；Board Identity 与 Bench 尚未开始。** `JinChanRoiRegistry` 是 normalized ROI 定义的唯一权威来源，版本为
 `JINCHAN_ROI_V1`，值原样迁自 JinChanAI frozen normalized ROI baseline，并非 HZZS 旧算法数据。
 Registry 当前只含 STAGE、LEVEL_EXP、GOLD、BOARD、SHOP、PLAYER_LIST、PANEL、SPECIAL、
 BENCH、PLAY_BTN 十项，不登记子 ROI。
@@ -75,6 +75,14 @@ Registry 复用 H1 canonical 尺寸常量，把 normalized geometry 解析为 ca
 canonical→source 必须调用 `JinChanCanonicalFrame.canonicalToSource`，不得复制 rotation/scaling
 公式。Registry 不缓存 frame、不保存 pixels、不复制整帧；同一租约作用域内可为同一 canonical
 frame 解析多个 ROI，但 H2 不发起 capture，也不包含 Recognizer、State、Decision、Overlay 或 Action。
+
+### JinChan Board Occupancy（H4-B）
+
+`JinChanBoardOccupancyProducer` 在 H3 publisher 已接受的同一 `JinChanCanonicalFrame` 租约内运行：仅接受
+3120×1440、稳定 `inGame && BOARD_OR_COMBAT`，从同帧计算 Scene Truth ratios，经 P6-5G Banner 与
+P6-5H Damage Panel guard 后按 `HEX_V2_FROZEN` 的 28 个 anchor 计算 V8 120 维特征。发布结果只含
+cell identity、nullable occupancy/probability 与源 `frameSeq`；SET 更新可信快照，HOLD 保留旧逻辑快照，
+CLEAR 清除。Board Identity、Bench、Overlay 与 Action 不消费该结果。
 
 ## 配置
 

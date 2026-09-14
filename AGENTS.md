@@ -87,9 +87,9 @@ app/src/test/      JVM 单测 + cpp/native_tests.cpp
 
 ### 主数据流
 
-JinChan H4-A 复用同一帧链路生成 LEVEL/EXP/GOLD 与五槽 Shop typed observation；Shop 只在稳定
-`inGame && SHOP_OPEN` 运行，未知槽不等于空槽，身份只做 GameData canonical/alias exact resolution。
-Gold 保持 best-effort，200 仅为数据集风险过滤值。Board/Bench/Decision/Action 不在 H4-A 范围。
+JinChan H4-A/H4-B 复用同一帧链路生成 LEVEL/EXP/GOLD、五槽 Shop 与 28 格 Board Occupancy typed observation；
+Shop 只在稳定 `inGame && SHOP_OPEN` 运行；Board 只在稳定 `inGame && BOARD_OR_COMBAT` 及 Scene/Banner/Damage
+门控通过后 SET，否则按冻结语义 HOLD/CLEAR。Gold 保持 best-effort。Board Identity/Bench/Decision/Action 仍不可达。
 
 ```text
 FrameSource → VisionRuntimeController（完成驱动取帧；HUD 显示时临时隐身）
