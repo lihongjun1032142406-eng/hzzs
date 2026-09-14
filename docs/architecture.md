@@ -14,6 +14,7 @@ platform 仅通过接口向运行时暴露能力
 | `core` | 稳定模型、DataStore、主题、设计系统、更新库、`logging` 诊断门面 |
 | `domain` | 与 Android 无关的视觉与手势规则（可 JVM 测试） |
 | `data/vision` | 帧循环所有者、JNI 适配、追踪、调试帧 |
+| `data/jinchan/frame` | HZZS 帧到 JinChan 3120×1440 canonical frame 的只读、零拷贝适配与唯一坐标换算层 |
 | `feature` | Compose 界面；不直接 Root / Shell / JNI / WindowManager |
 | `service` | 截图后端、悬浮窗、无障碍手势 |
 | `platform/compat` | 版本与能力探测；系统悬浮窗/无障碍/修改系统设置与指针位置（`SystemCapabilityAccess`） |
@@ -45,6 +46,15 @@ platform 仅通过接口向运行时暴露能力
 解析入口：`resolveEffectiveCaptureBackend`（开发者 `forceCaptureBackend` 优先）。本机 API 不支持请求后端时 **fail-soft** 回退到可用的用户主配置或 MediaProjection，写入诊断 `capture.requested/effective/fallbackReason`；**不会**把 AUTO 升权到无障碍 / Shizuku / Root。
 
 `CapturedFrame` 拥有像素租约，分析结束后必须 `close()`。不得跨帧保存底层缓冲引用。
+
+### JinChan Frame Bridge（H1）
+
+`JinChanFrameBridge.adapt(CapturedFrame)` 在现有租约内借用同一 `IntArray`，保留 frame
+sequence 与 elapsed-realtime timestamp，不复制整帧、不接管 `close()`。它只输出 source
+尺寸/顺时针 rotation 与固定 `3120×1440` canonical metadata，并由
+`JinChanCanonicalFrame.sourceToCanonical` / `canonicalToSource` 统一完成点和矩形的双向换算。
+旋转只接受 0/90/180/270，旋转后的画面必须为 landscape；非法边界或无法解释的方向明确拒绝。
+H1 不注册 Shop/Board/Bench/HUD ROI，不接 recognizer、Decision、Overlay 或 Action。
 
 ## 配置
 
