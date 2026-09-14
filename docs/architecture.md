@@ -15,7 +15,7 @@ platform 仅通过接口向运行时暴露能力
 | `domain` | 与 Android 无关的视觉与手势规则（可 JVM 测试） |
 | `data/vision` | 帧循环所有者、JNI 适配、追踪、调试帧 |
 | `data/jinchan/frame` | HZZS 帧到 JinChan 3120×1440 canonical frame 的只读、零拷贝适配与唯一坐标换算层 |
-| `data/jinchan/perception` | H4-A HUD/Shop 与 H4-B Board Occupancy 冻结几何、同帧像素读取、Scene/污染门控及 fail-closed typed observation |
+| `data/jinchan/perception` | H4-A HUD/Shop、H4-B Board Occupancy 与 H4-C 纯结构化 Bench contract adapter；Bench 不含 raw-frame producer |
 | `feature` | Compose 界面；不直接 Root / Shell / JNI / WindowManager |
 | `service` | 截图后端、悬浮窗、无障碍手势 |
 | `platform/compat` | 版本与能力探测；系统悬浮窗/无障碍/修改系统设置与指针位置（`SystemCapabilityAccess`） |
@@ -66,7 +66,7 @@ session、帧序号单调性及调用方传入的 elapsed-realtime stale timeout
 ### JinChan ROI Registry（H2）
 
 阶段状态：**H1 Frame Bridge + Runtime、H2 ROI Registry、H3 Shadow State、H4-A HUD/Shop 与
-H4-B Board Occupancy 已迁移；Board Identity 与 Bench 尚未开始。** `JinChanRoiRegistry` 是 normalized ROI 定义的唯一权威来源，版本为
+H4-B Board Occupancy 与 H4-C structured Bench contract 已迁移；Board Identity 与 raw Bench vision producer 尚未开始。** `JinChanRoiRegistry` 是 normalized ROI 定义的唯一权威来源，版本为
 `JINCHAN_ROI_V1`，值原样迁自 JinChanAI frozen normalized ROI baseline，并非 HZZS 旧算法数据。
 Registry 当前只含 STAGE、LEVEL_EXP、GOLD、BOARD、SHOP、PLAYER_LIST、PANEL、SPECIAL、
 BENCH、PLAY_BTN 十项，不登记子 ROI。
@@ -83,6 +83,14 @@ frame 解析多个 ROI，但 H2 不发起 capture，也不包含 Recognizer、St
 P6-5H Damage Panel guard 后按 `HEX_V2_FROZEN` 的 28 个 anchor 计算 V8 120 维特征。发布结果只含
 cell identity、nullable occupancy/probability 与源 `frameSeq`；SET 更新可信快照，HOLD 保留旧逻辑快照，
 CLEAR 清除。Board Identity、Bench、Overlay 与 Action 不消费该结果。
+
+### JinChan Bench structured contract（H4-C）
+
+`JinChanStructuredBenchAdapter` 只接收上游已经结构化的槽位证据，按 0-based slot identity 输出
+`HERO` / `EMPTY` / `UNKNOWN` typed observation，并复用 Shop 的可注入 exact hero resolver。缺槽不会挪位，
+重复、越界或畸形输入 fail closed；普通 `publishFrame` 没有显式 Bench 输入时仍发布绑定当前帧的
+UNAVAILABLE。此阶段没有像素、CV、OCR、星级视觉检测或新阈值；raw Bench producer 仍为 YELLOW，
+不得宣称 production-ready。
 
 ## 配置
 
@@ -202,9 +210,9 @@ analyze(frame) 只读当前 generation 对应快照
 
 `UpdateRepository`：Gitee 优先、GitHub 校验、清单签名、APK / 差分哈希与证书绑定。应用内 UI 负责触发检查与安装跳转。
 
-## JinChan 迁移阶段：H4-A HUD + Shop
+## JinChan 迁移阶段：H4-C structured Bench contract
 
-当前迁移状态为 **H1/H2 = FROZEN、H3 = MERGED、H4-A HUD + Shop = CURRENT**。H3 publisher 在
+当前迁移状态为 **H1/H2 = FROZEN、H3/H4-A/H4-B = MERGED、H4-C structured contract = CURRENT**。H3 publisher 在
 `VisionRuntimeController` 的同一个 `CapturedFrame.use` 租约内只做一次 bridge/session accept，H4-A
 producer 复用该 canonical frame 与同一 `frameSeq`。LEVEL/EXP 使用冻结 ROI、edge visibility 与范围
 validator；GOLD 保留 `UNAVAILABLE/RAW_VALID/UNTRUSTED/TRUSTED` 语义，其中 200 仅为观测数据风险
@@ -213,5 +221,6 @@ validator；GOLD 保留 `UNAVAILABLE/RAW_VALID/UNTRUSTED/TRUSTED` 语义，其�
 Shop 固定保留五个槽和槽内 name band；只在稳定 `inGame == true && uiState == SHOP_OPEN` 时运行。
 G1/G2/G3 不把 `UNKNOWN` 转成 `EMPTY`，英雄名只允许 GameData canonical/alias exact resolution；任何
 exception、PARTIAL、ERROR、NOT_AVAILABLE 或 builder unavailable 均不发布 AVAILABLE Shop。latest-only
-Shadow State 只持有 typed value 与 ROI 元数据，不持有 frame/pixels/action。Board/Bench 仍为 UNKNOWN，
-不接 Decision、GestureDispatcher 或任何真实 Action。
+Shadow State 只持有 typed value 与 ROI 元数据，不持有 frame/pixels/action。Board 已为 typed occupancy；
+Bench 仅在调用方显式注入 structured evidence 时投影 typed value，无输入仍为 UNKNOWN/UNAVAILABLE，且没有
+raw-frame Bench producer。不接 Decision、GestureDispatcher 或任何真实 Action。
