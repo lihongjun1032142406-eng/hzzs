@@ -38,6 +38,8 @@ import top.azek431.hzzs.core.model.GestureBackend
 import top.azek431.hzzs.core.model.OverlayBlockReason
 import top.azek431.hzzs.core.model.RuntimeStatus
 import top.azek431.hzzs.core.preferences.SettingsRepository
+import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
+import top.azek431.hzzs.data.jinchan.state.JinChanShadowStatePublisher
 import top.azek431.hzzs.platform.compat.CaptureBackendResolution
 import top.azek431.hzzs.platform.compat.GestureCapabilityResolver
 import top.azek431.hzzs.platform.compat.ShizukuHealthCheck
@@ -91,6 +93,7 @@ class VisionRuntimeController @Inject constructor(
     private val debugFrameRecorder: DebugFrameRecorder,
     private val gestureDispatchers: GestureDispatcherFactory,
     private val gestureCapabilities: GestureCapabilityResolver,
+    private val jinChanShadowStatePublisher: JinChanShadowStatePublisher,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lifecycleMutex = Mutex()
@@ -113,6 +116,9 @@ class VisionRuntimeController @Inject constructor(
 
     @Volatile
     private var activeSource: FrameSource? = null
+
+    @Volatile
+    private var jinChanSessionId: JinChanFrameSessionId? = null
 
     // Shizuku 持续监控相关字段
     private var shizukuHealthCheckJob: Job? = null
@@ -223,6 +229,8 @@ class VisionRuntimeController @Inject constructor(
                 )
             }
             activeSource = source
+            val jinChanSession = jinChanShadowStatePublisher.startSession()
+            jinChanSessionId = jinChanSession
             mutableStatus.value = RuntimeStatus(
                 running = true,
                 activeBackend = backend,
@@ -238,11 +246,14 @@ class VisionRuntimeController @Inject constructor(
                         token = token,
                         source = source,
                         startedBackend = backend,
+                        jinChanSession = jinChanSession,
                     )
                 }
                 // 分析启停绑定前台服务，降低 OEM 后台杀进程概率；仅 alive 期间提优先级。
                 VisionAnalysisForegroundService.start(appContext)
             } catch (error: Throwable) {
+                jinChanShadowStatePublisher.stopSession(jinChanSession)
+                jinChanSessionId = null
                 activeSource = null
                 runCatching { source.stop() }
                 AppLog.e("vision", "start capture failed: ${error.message}", error)
@@ -269,6 +280,8 @@ class VisionRuntimeController @Inject constructor(
         val prevGen = generation.get()
         generation.incrementAndGet()
         AppLog.i("vision", "stop session prevGen=$prevGen")
+        jinChanSessionId?.let(jinChanShadowStatePublisher::stopSession)
+        jinChanSessionId = null
         runtimeJob?.cancelAndJoin()
         runtimeJob = null
         val source = activeSource
@@ -414,6 +427,7 @@ class VisionRuntimeController @Inject constructor(
         token: Long,
         source: FrameSource,
         startedBackend: CaptureBackend,
+        jinChanSession: JinChanFrameSessionId,
     ) {
         var lastSequence = -1L
         var frameCount = 0
@@ -490,6 +504,13 @@ class VisionRuntimeController @Inject constructor(
                     if (generation.get() != token) return@use
                     if (lease.sequence <= lastSequence) return@use
                     lastSequence = lease.sequence
+                    jinChanShadowStatePublisher.publishFrame(
+                        sessionId = jinChanSession,
+                        source = lease,
+                        nowElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
+                        staleTimeoutNanos = JINCHAN_FRAME_STALE_TIMEOUT_NS,
+                    )
+                    if (generation.get() != token || jinChanSessionId != jinChanSession) return@use
                     frameCount++
                     if (config.developer.enabled) {
                         debugFrameRecorder.offer(lease, config.developer)
@@ -577,6 +598,8 @@ class VisionRuntimeController @Inject constructor(
         const val READY_NULL_FRAME_BACKOFF_MS = 12L
         const val IDLE_BACKOFF_MS = 80L
         const val SHIZUKU_HEALTH_CHECK_INTERVAL_MS = 30_000L
+        // Reuses the former runtime action frame-age safety bound; H3 does not tune game thresholds.
+        const val JINCHAN_FRAME_STALE_TIMEOUT_NS = 1_000_000_000L
         const val SHIZUKU_NOTIFICATION_CHANNEL_ID = "shizuku_health_channel"
         const val SHIZUKU_NOTIFICATION_ID = 1001
     }

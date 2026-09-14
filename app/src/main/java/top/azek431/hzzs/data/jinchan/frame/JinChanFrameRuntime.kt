@@ -107,6 +107,24 @@ class JinChanFrameRuntime {
             is JinChanFrameBridgeResult.Valid -> bridged.frame
             is JinChanFrameBridgeResult.Rejected -> return result(JinChanFrameRuntimeStatus.INVALID_FRAME)
         }
+        return acceptCanonical(sessionId, canonical, nowElapsedRealtimeNanos, staleTimeoutNanos)
+    }
+
+    /** H3 entry point for an already adapted same-lease frame; avoids a second bridge adaptation. */
+    @Synchronized
+    fun acceptCanonical(
+        sessionId: JinChanFrameSessionId,
+        canonical: JinChanCanonicalFrame,
+        nowElapsedRealtimeNanos: Long,
+        staleTimeoutNanos: Long,
+    ): JinChanFrameRuntimeResult {
+        require(staleTimeoutNanos >= 0L)
+        val active = activeSessionId ?: return result(JinChanFrameRuntimeStatus.INACTIVE)
+        if (sessionId != active) return result(JinChanFrameRuntimeStatus.WRONG_SESSION)
+        if (isStaleOrInvalid(canonical.sourceElapsedRealtimeNanos, nowElapsedRealtimeNanos, staleTimeoutNanos)) {
+            return result(if (canonical.sourceElapsedRealtimeNanos > nowElapsedRealtimeNanos) JinChanFrameRuntimeStatus.INVALID_FRAME else JinChanFrameRuntimeStatus.STALE)
+        }
+        if (latestMetadata?.frameId?.let { canonical.sourceSequence <= it } == true) return result(JinChanFrameRuntimeStatus.OUT_OF_ORDER)
         val metadata = JinChanLatestFrameMetadata(
             sessionId = sessionId,
             frameId = canonical.sourceSequence,
