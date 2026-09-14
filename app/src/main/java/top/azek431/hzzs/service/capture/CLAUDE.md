@@ -7,6 +7,7 @@
 - `FrameSource` 抽象 + `CaptureState` 状态机（Idle / RequestingPermission / Ready / Failed）。
 - `CapturedFrame`：单帧像素租约，**分析完必须 close**，禁止跨帧保存底层缓冲引用。
 - `data/jinchan/frame/JinChanFrameBridge`：H1 只读、零拷贝适配；统一负责 HZZS source 与 3120×1440 JinChan canonical 像素边界坐标互转，不注册 ROI、不做识别或动作。
+- `data/jinchan/frame/JinChanFrameRuntime`：H1 session/latest metadata 管理；校验 session、帧序与调用方传入的 stale timeout，latest 不持有池化像素。
 - `IntFramePool`：有界、分代感知的 Int 像素池（分辨率变化递增 generation，旧租约不得回池）。
 - `PlaneRgbaReader` / `FrameSequencer`：Image→ARGB 拷贝与单调帧序号。
 - 五个后端：`AutoFrameSource` / `MediaProjectionFrameSource` / `AccessibilityFrameSource` / `ShizukuFrameSource` / `RootFrameSource`。

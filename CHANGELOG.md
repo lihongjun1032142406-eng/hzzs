@@ -11,7 +11,7 @@
 
 ### 新增
 
-- **JinChan Frame Bridge（H1）**：增加 HZZS `CapturedFrame` 到固定 3120×1440 landscape canonical frame 的只读零拷贝适配，保留帧序号/时间戳/租约所有权，并集中提供 source↔canonical 点/矩形坐标换算；不包含 ROI、识别、Decision 或 Action。
+- **JinChan Frame Bridge + Runtime（H1）**：增加 HZZS `CapturedFrame` 到固定 3120×1440 landscape canonical frame 的只读零拷贝适配，保留帧序号/时间戳/租约所有权，并集中提供 source↔canonical 点/矩形坐标换算；轻量 runtime 只缓存无像素的 latest metadata，提供 session 隔离、乱序拒绝和调用方参数化 stale 检查；不包含 ROI、识别、Decision 或 Action。
 - **MCP 工具链增强（9 向能力）**：`inspect` 一键聚合诊断；`patch_settings` 支持 `operations`（set/add/remove/toggle）；命名 profile CRUD（`save/load/list/delete_profile`）；`get_debug_frame` / `capture_debug_frame`（HIGH_RISK，路径穿越防护 + maxWidth 64..1080）；`get_version` / `check_update`（严格 wifiOnly）/ `get_metrics`；进程内 `McpEventBus` + `get_events` / `app://events`；`upgrade_algorithms`（dryRun 无副作用，真升级顺序队列）。安全：profile load 走 `hardenedForExternalIngest`；事件不记 Token/参数。
 - **算法执行过程可观测性**：`VisionResult` 增加 `timing`（JNI / 主检测 / 后过滤 / 归一化 4 段耗时）、`multicolorDiag`（每模板命中/拒绝原因 + 搜索区，不记录 RGB 资产）、`filteredOut`（尺寸窗剔除障碍 + 原因）。C++ 采样经 JNI 回传；默认全关。
 - **开发者诊断三开关**：`enableStageTiming` / `enableMulticolorDiagnostic` / `enableFilterTrace`；DEBUG_HUD 显示阶段耗时、找色 m/n、过滤数；穿透层叠加命中点 / 搜索区品红虚线 / 过滤黄虚线框。

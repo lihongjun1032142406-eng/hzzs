@@ -56,6 +56,12 @@ sequence 与 elapsed-realtime timestamp，不复制整帧、不接管 `close()`�
 旋转只接受 0/90/180/270，旋转后的画面必须为 landscape；非法边界或无法解释的方向明确拒绝。
 H1 不注册 Shop/Board/Bench/HUD ROI，不接 recognizer、Decision、Overlay 或 Action。
 
+`JinChanFrameRuntime` 在该桥之上管理递增的 capture session identity 和最新有效帧元数据。
+每次 `startSession` 清空上一 session，`stopSession`/`resetSession` 清空 latest；发布和读取均校验
+session、帧序号单调性及调用方传入的 elapsed-realtime stale timeout。latest cache 只含尺寸、
+方向、frame id 与 timestamp，不保存 canonical frame 或池化 `IntArray`，因此原租约关闭后没有
+悬挂像素引用，也没有持续整帧复制。
+
 ## 配置
 
 DataStore 存储 schema **v9**（含 `automation.gestureBackend`、`mcp.toolPolicies`、`mcp.accessLogEnabled`）。`SettingsRepository` 以已保存配置为真相源，仍保留进程内 preview 层（引导/外部预览可用）。
