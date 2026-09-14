@@ -6,6 +6,8 @@
 
 - `FrameSource` 抽象 + `CaptureState` 状态机（Idle / RequestingPermission / Ready / Failed）。
 - `CapturedFrame`：单帧像素租约，**分析完必须 close**，禁止跨帧保存底层缓冲引用。
+- `data/jinchan/frame/JinChanFrameBridge`：H1 只读、零拷贝适配；统一负责 HZZS source 与 3120×1440 JinChan canonical 像素边界坐标互转，不注册 ROI、不做识别或动作。
+- `data/jinchan/frame/JinChanFrameRuntime`：H1 session/latest metadata 管理；校验 session、帧序与调用方传入的 stale timeout，latest 不持有池化像素。
 - `IntFramePool`：有界、分代感知的 Int 像素池（分辨率变化递增 generation，旧租约不得回池）。
 - `PlaneRgbaReader` / `FrameSequencer`：Image→ARGB 拷贝与单调帧序号。
 - 五个后端：`AutoFrameSource` / `MediaProjectionFrameSource` / `AccessibilityFrameSource` / `ShizukuFrameSource` / `RootFrameSource`。
@@ -36,6 +38,7 @@ VisionRuntimeController.start
 - Shizuku/Root：stdout/stderr 限长（32MB/64KB）、超时 destroy、失败返回 null；进程通道与手势同源 `ShellProcessSupport`。
 - 线程：Image 回调在专用 `HandlerThread`（DISPLAY 优先级）；状态与通道可跨线程；未投递帧在 Channel 回调中 close。
 - 坐标：截图输出为像素缓冲，**不做归一化**；归一化在 domain/vision 与绘制层。
+- JinChan canonical 坐标是隔离的像素边界坐标协议；仅允许经 `JinChanCanonicalFrame` 双向换算，方向或旋转无法可靠解释时 fail-closed。
 
 ## 改这个包前必读
 

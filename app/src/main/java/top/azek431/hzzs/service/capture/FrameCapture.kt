@@ -22,6 +22,8 @@ class CapturedFrame(
     val width: Int,
     val height: Int,
     val pixels: IntArray,
+    /** Clockwise rotation needed to display [pixels] upright. Capture backends currently emit 0. */
+    val rotationDegrees: Int = 0,
     private val releaseLease: (() -> Unit)? = null,
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
