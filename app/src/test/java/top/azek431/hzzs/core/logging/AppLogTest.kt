@@ -66,16 +66,12 @@ class AppLogTest {
         AppLog.e("vision", "capture failed for demo")
         AppLog.w("vision", "capture slow")
         val onlyAlgo = AppLog.query(tagEquals = "vision")
-        assertEquals(1, onlyAlgo.size)
-        assertTrue(onlyAlgo.single().message.contains("activate failed"))
+        assertEquals(3, onlyAlgo.size)
+        assertTrue(onlyAlgo.any { it.message.contains("capture failed") })
         val search = AppLog.query(query = "capture")
-        assertEquals(1, search.size)
+        assertEquals(2, search.size)
         val newest = AppLog.query(newestFirst = true)
-        assertTrue(
-            newest.first().message.contains("capture slow") ||
-                newest.first().message.contains("activate") ||
-                newest.first().message.contains("frame"),
-        )
+        assertTrue(newest.first().message.contains("capture slow"))
         assertEquals(AppLog.size().toLong().coerceAtLeast(1L) > 0, AppLog.revision() > 0)
         assertTrue(AppLog.knownTags().contains("vision"))
         assertTrue(AppLog.formatText(tagEquals = "vision").contains("capture failed"))
@@ -143,9 +139,9 @@ class DiagnosticsExporterTest {
         assertTrue(report.contains("mcp.port=8765"))
         assertTrue(report.contains("debugFrameCount=3"))
         assertTrue(report.contains("developer.logLevel=DEBUG"))
-        assertTrue(report.contains("id=builtin.hzzs.base"))
-        assertTrue(report.contains("version=0.1.0"))
-        assertTrue(report.contains("generation=3"))
+        assertTrue(report.contains("cleanBase=true"))
+        assertTrue(report.contains("actionEnabled=false"))
+        assertTrue(report.contains("overlayDefaultEnabled=false"))
         assertTrue(report.contains("vision.overlayBlockReason=PERMISSION"))
         assertTrue(report.contains("capture.requested="))
         assertTrue(report.contains("capture.effective="))

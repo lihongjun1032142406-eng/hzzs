@@ -764,7 +764,8 @@ object ConfigJson {
                 highContrast = theme?.optBoolean("highContrast", false) ?: false,
             ),
             overlay = defaults.overlay.copy(
-                enabled = overlay?.optBoolean("enabled", true) ?: true,
+                enabled = overlay?.optBoolean("enabled", defaults.overlay.enabled)
+                    ?: defaults.overlay.enabled,
                 style = enumOr(overlay?.optString("style"), defaults.overlay.style),
                 theme = enumOr(overlay?.optString("theme"), defaults.overlay.theme),
                 customColor = overlay?.optInt("customColor", defaults.overlay.customColor) ?: defaults.overlay.customColor,
