@@ -125,6 +125,46 @@ class JinChanShadowStatePublisherTest {
         assertEquals(ShadowFieldStatus.UNKNOWN, state.bench.status)
     }
 
+    @Test
+    fun heldBoardKeepsTrustedCellsButUsesCurrentFrameIdentity() {
+        val publisher = JinChanShadowStatePublisher()
+        val session = publisher.startSession()
+        val trustedPixels = IntArray(3_120 * 1_440) { 0xff828282.toInt() }
+
+        val first = publisher.publishFrame(
+            session,
+            CapturedFrame(100, 1_000, 3_120, 1_440, trustedPixels.copyOf()),
+            1_000,
+            100,
+            stableState = JinChanStableState(true, JinChanStableUiState.BOARD_OR_COMBAT),
+        )
+        requireNotNull(first)
+        val firstBoard = requireNotNull(first.board.value)
+        assertEquals(ShadowFieldStatus.AVAILABLE, first.board.status)
+        assertEquals(100L, firstBoard.frameSeq)
+        assertEquals(BoardSnapshotDecision.SET, firstBoard.decision)
+        assertEquals(28, firstBoard.cells.size)
+
+        val second = publisher.publishFrame(
+            session,
+            CapturedFrame(101, 1_001, 3_120, 1_440, trustedPixels.copyOf()),
+            1_001,
+            100,
+            stableState = JinChanStableState(true, JinChanStableUiState.SHOP_OPEN),
+        )
+        requireNotNull(second)
+        val heldBoard = requireNotNull(second.board.value)
+        assertEquals(101L, second.frameSeq)
+        assertEquals(ShadowFieldStatus.AVAILABLE, second.board.status)
+        assertEquals(101L, heldBoard.frameSeq)
+        assertEquals(BoardSnapshotDecision.HOLD, heldBoard.decision)
+        assertEquals("SCENE_NOT_ELIGIBLE", heldBoard.reason)
+        assertEquals(firstBoard.cells, heldBoard.cells)
+        assertEquals(firstBoard.occupiedCount, heldBoard.occupiedCount)
+        assertEquals(100L, firstBoard.frameSeq)
+        assertEquals(BoardSnapshotDecision.SET, firstBoard.decision)
+    }
+
     private fun frame(sequence: Long, timestamp: Long, width: Int = 3_120, height: Int = 1_440) = CapturedFrame(
         sequence = sequence,
         elapsedRealtimeNanos = timestamp,
