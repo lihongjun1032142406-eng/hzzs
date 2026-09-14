@@ -93,7 +93,6 @@ fun HomeScreen(
                     },
                     active = status.running,
                 )
-                StatusChip(config.selectedScene.displayName(), active = true)
                 StatusChip(config.captureBackend.displayName(), active = false)
             }
         }
@@ -105,7 +104,7 @@ fun HomeScreen(
                 } else {
                     stringResource(R.string.home_hero_idle)
                 },
-                subtitle = "${config.selectedScene.displayName()} · ${config.captureBackend.displayName()}",
+                subtitle = config.captureBackend.displayName(),
                 icon = Icons.Rounded.Visibility,
             ) {
                 Text(
@@ -139,11 +138,6 @@ fun HomeScreen(
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     HzzsMetricGrid {
-                        MetricTile(
-                            label = stringResource(R.string.home_metric_scene),
-                            value = config.selectedScene.displayName(),
-                            modifier = Modifier.weight(1f),
-                        )
                         MetricTile(
                             label = stringResource(R.string.home_metric_capture),
                             value = config.captureBackend.displayName(),

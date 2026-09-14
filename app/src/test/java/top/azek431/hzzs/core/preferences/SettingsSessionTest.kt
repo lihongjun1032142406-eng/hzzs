@@ -8,8 +8,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.AutomationConfig
+import top.azek431.hzzs.core.model.CaptureBackend
 import top.azek431.hzzs.core.model.GestureBackend
-import top.azek431.hzzs.core.model.SceneId
 
 class SettingsSessionTest {
     @Test
@@ -27,8 +27,8 @@ class SettingsSessionTest {
             },
         )
 
-        session.update { it.copy(selectedScene = SceneId.SWEET_FACTORY) }
-        assertEquals(SceneId.SWEET_FACTORY, effective.selectedScene)
+        session.update { it.copy(captureBackend = CaptureBackend.ACCESSIBILITY) }
+        assertEquals(CaptureBackend.ACCESSIBILITY, effective.captureBackend)
         assertTrue(session.hasChanges())
 
         assertEquals(original, session.discard())
@@ -54,13 +54,13 @@ class SettingsSessionTest {
 
         // 模拟连续 UI 修改后整份草稿写回，而不是只应用最后一个 transform。
         val composed = original.copy(
-            selectedScene = SceneId.SWEET_FACTORY,
+            captureBackend = CaptureBackend.ACCESSIBILITY,
             overlay = original.overlay.copy(showFps = true),
         )
         session.replace(composed)
-        assertEquals(SceneId.SWEET_FACTORY, effective.selectedScene)
+        assertEquals(CaptureBackend.ACCESSIBILITY, effective.captureBackend)
         assertTrue(effective.overlay.showFps)
-        assertEquals(composed.selectedScene, session.current().selectedScene)
+        assertEquals(composed.captureBackend, session.current().captureBackend)
         assertTrue(session.current().overlay.showFps)
     }
 
@@ -131,31 +131,6 @@ class SettingsSessionTest {
         assertTrue(complete.onboarding.completed)
     }
 
-    @Test
-    fun seaSaltTriggerDistanceRoundTripsAndValidates() {
-        val configured = AppConfig().copy(
-            automation = AutomationConfig(
-                sweetTriggerDistancePlayerWidths = 1.6f,
-                bambooTriggerDistancePlayerWidths = 1.2f,
-                seaSaltTriggerDistancePlayerWidths = 1.75f,
-            ),
-        )
-        val decoded = ConfigJson.decode(ConfigJson.encode(configured))
-        assertEquals(1.75f, decoded.automation.seaSaltTriggerDistancePlayerWidths, 0.001f)
-
-        val root = JSONObject(ConfigJson.encode(configured))
-        assertTrue(root.getJSONObject("automation").has("seaSaltTriggerDistancePlayerWidths"))
-
-        val clamped = AppConfig().copy(
-            automation = AutomationConfig(seaSaltTriggerDistancePlayerWidths = 99f),
-        ).validated()
-        assertEquals(8f, clamped.automation.seaSaltTriggerDistancePlayerWidths, 0.001f)
-
-        val missingField = JSONObject(ConfigJson.encode(AppConfig()))
-        missingField.getJSONObject("automation").remove("seaSaltTriggerDistancePlayerWidths")
-        val fallback = ConfigJson.decode(missingField.toString())
-        assertEquals(5.0f, fallback.automation.seaSaltTriggerDistancePlayerWidths, 0.001f)
-    }
 
     @Test
     fun packageRestrictionDefaultsOffAndAllowsCustomPackages() {

@@ -5,7 +5,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import top.azek431.hzzs.domain.vision.Avoidance
 
 /**
  * 自动操作领域模型（纯 Kotlin）。
@@ -52,7 +51,6 @@ data class GestureSpec(
  *
  * @property id 动作唯一 ID（用于回执匹配）
  * @property trackId Tracker 稳定 ID；成功提交后进入账本，避免重复规划
- * @property avoidance 规避类型，决定手势形态
  * @property createdAtUptimeMs / expiresAtUptimeMs 基于 `SystemClock.uptimeMillis` 的 TTL
  * @property allowedPackages 包名白名单；**空集表示不限制包名**。分发前仍须再校验前台包（若非空）
  * @property requiredWindowClassPrefixes 可选窗口类前缀约束
@@ -61,7 +59,6 @@ data class GestureSpec(
 data class AutomationAction(
     val id: Long,
     val trackId: Long,
-    val avoidance: Avoidance,
     val gesture: GestureSpec,
     val createdAtUptimeMs: Long,
     val expiresAtUptimeMs: Long,

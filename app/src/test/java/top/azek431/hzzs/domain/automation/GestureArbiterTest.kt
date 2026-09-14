@@ -8,7 +8,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import top.azek431.hzzs.domain.vision.Avoidance
 
 class GestureArbiterTest {
     @Test
@@ -188,7 +187,6 @@ class GestureArbiterTest {
     private fun action(id: Long) = AutomationAction(
         id = id,
         trackId = id,
-        avoidance = Avoidance.JUMP,
         gesture = GestureSpec(0.8f, 0.8f),
         createdAtUptimeMs = 0L,
         expiresAtUptimeMs = 1_000L,

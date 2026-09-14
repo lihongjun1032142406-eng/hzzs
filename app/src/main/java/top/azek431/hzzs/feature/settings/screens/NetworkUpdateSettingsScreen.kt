@@ -24,9 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import top.azek431.hzzs.core.algorithm.AlgorithmCatalogState
 import top.azek431.hzzs.core.designsystem.LocalHzzsDimensions
-import top.azek431.hzzs.core.model.AlgorithmChannel
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.UpdateChannel
 import top.azek431.hzzs.core.model.UpdateSourcePreference
@@ -40,20 +38,19 @@ import top.azek431.hzzs.feature.settings.components.SettingsWarningCard
 /**
  * 网络与更新设置页。
  *
- * 应用更新检查/下载/安装走 ViewModel 即时任务；算法通道偏好草稿预览。
+ * 应用更新检查/下载/安装走 ViewModel 即时任务。
  * 未发布签名索引时检查失败为预期。本页不绕过证书绑定验签。
+ * Clean Base：算法包下载/通道设置已随算法层清退移除。
  */
 @Composable
 fun NetworkUpdateSettingsScreen(
     config: AppConfig,
     updateState: UpdateUiState,
-    algorithmState: AlgorithmCatalogState,
     update: ((AppConfig) -> AppConfig) -> Unit,
     onCheckApp: () -> Unit,
     onDownloadApp: () -> Unit,
     onInstallApp: () -> Unit,
     onIgnoreApp: () -> Unit,
-    onRefreshAlgorithms: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimensions = LocalHzzsDimensions.current
@@ -117,64 +114,15 @@ fun NetworkUpdateSettingsScreen(
             ) {
                 SettingsSwitchRow(
                     title = "仅 Wi‑Fi 下载大文件",
-                    subtitle = "应用 APK 与算法包大文件下载共用此策略；小型目录 JSON 检查不受限制。",
+                    subtitle = "应用 APK 大文件下载使用此策略；小型检查不受限制。",
                     checked = config.update.wifiOnly,
                     onCheckedChange = { value ->
                         update { it.copy(update = it.update.copy(wifiOnly = value)) }
                     },
                 )
-                Text(
-                    "当前实际来源：${algorithmState.activeSource?.name ?: "尚未探测"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                algorithmState.lastMirrorReason?.let { reason ->
-                    Text(
-                        "上次镜像切换：${reason.take(120)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
         }
 
-        item {
-            SettingsSectionCard(
-                title = "算法更新",
-                description = "通道偏好可保存。目录 HTTPS 拉取；下载经 size/sha256 + ZIP 白名单校验后落盘（当前暂未启用 Ed25519 签名验签）。",
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AlgorithmChannel.entries.forEach { channel ->
-                        SettingsRadioCard(
-                            title = "${channel.displayName()}算法通道",
-                            selected = config.algorithm.channel == channel,
-                            onClick = {
-                                update {
-                                    it.copy(algorithm = it.algorithm.copy(channel = channel))
-                                }
-                            },
-                        )
-                    }
-                }
-                SettingsSwitchRow(
-                    title = "自动检查算法更新",
-                    subtitle = "启动时刷新算法目录（需网络）。",
-                    checked = config.algorithm.autoCheck,
-                    onCheckedChange = { value ->
-                        update { it.copy(algorithm = it.algorithm.copy(autoCheck = value)) }
-                    },
-                )
-                SettingsSwitchRow(
-                    title = "自动下载算法更新",
-                    subtitle = "检查后自动下载兼容最新包（手动模式不自动激活）。",
-                    checked = config.algorithm.autoDownload,
-                    onCheckedChange = { value ->
-                        update { it.copy(algorithm = it.algorithm.copy(autoDownload = value)) }
-                    },
-                )
-                Button(onClick = onRefreshAlgorithms) { Text("手动检查算法") }
-            }
-        }
 
         item {
             SettingsSectionCard(

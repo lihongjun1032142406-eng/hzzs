@@ -83,41 +83,31 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.azek431.hzzs.R
-import top.azek431.hzzs.core.algorithm.AlgorithmActivationCoordinator
 import top.azek431.hzzs.core.designsystem.HzzsCallout
 import top.azek431.hzzs.core.designsystem.HzzsCalloutTone
 import top.azek431.hzzs.core.designsystem.LocalHzzsDimensions
 import top.azek431.hzzs.core.designsystem.SectionCard
-import top.azek431.hzzs.core.logging.AlgorithmDiagnosticsSnapshot
 import top.azek431.hzzs.core.logging.DiagnosticsExporter
 import top.azek431.hzzs.core.logging.McpDiagnosticsSnapshot
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.preferences.SettingsRepository
 import top.azek431.hzzs.data.vision.DebugFrameRecorder
-import top.azek431.hzzs.data.vision.NativeBenchmarkResult
-import top.azek431.hzzs.data.vision.NativeBenchmarkRunner
 import top.azek431.hzzs.data.vision.VisionRuntimeController
-import top.azek431.hzzs.domain.vision.VisionEngine
-import top.azek431.hzzs.feature.settings.screens.AlgorithmPipelineScreen
 import top.azek431.hzzs.feature.settings.screens.DeveloperSettingsScreen
 import top.azek431.hzzs.feature.settings.screens.LogViewerScreen
 import top.azek431.hzzs.mcp.McpUiBridge
-import top.azek431.hzzs.nativevision.NativeVision
 import javax.inject.Inject
 
 enum class DonationKind { WECHAT, ALIPAY, IEF_DIAN }
 
-/** 关于页状态：配置流、调试帧计数、Native 自检；开发者 UI 复用设置模块组件。 */
+/** 关于页状态：配置流、调试帧计数；开发者 UI 复用设置模块组件。 */
 @HiltViewModel
 class AboutViewModel @Inject constructor(
     @param:ApplicationContext private val appContext: Context,
     private val repository: SettingsRepository,
     mcpUiBridge: McpUiBridge,
     private val debugFrames: DebugFrameRecorder,
-    private val benchmarkRunner: NativeBenchmarkRunner,
-    private val visionEngine: VisionEngine,
     private val visionRuntime: VisionRuntimeController,
-    private val algorithmActivation: AlgorithmActivationCoordinator,
 ) : ViewModel() {
     val config: StateFlow<AppConfig> = repository.config.stateIn(
         viewModelScope,
@@ -127,8 +117,6 @@ class AboutViewModel @Inject constructor(
     private val mcpState = mcpUiBridge.serverState
     private val mutableDebugFrameCount = MutableStateFlow(0)
     val debugFrameCount: StateFlow<Int> = mutableDebugFrameCount.asStateFlow()
-    private val mutableBenchmark = MutableStateFlow<Result<NativeBenchmarkResult>?>(null)
-    val benchmark: StateFlow<Result<NativeBenchmarkResult>?> = mutableBenchmark.asStateFlow()
 
     init {
         refreshDebugFrameCount()
@@ -156,12 +144,7 @@ class AboutViewModel @Inject constructor(
         }
     }
 
-    fun runNativeBenchmark() {
-        val iterations = config.value.developer.nativeBenchmarkIterations
-        viewModelScope.launch { mutableBenchmark.value = benchmarkRunner.run(iterations) }
-    }
-
-    /** 脱敏诊断摘要：版本 / 机型 / 配置 / 算法激活 / 运行态 / 最近日志；不含 Bearer。 */
+    /** 脱敏诊断摘要：版本 / 机型 / 配置 / 运行态 / 最近日志；不含 Bearer。 */
     fun buildDiagnosticsReport(): String {
         val current = config.value
         val mcp = mcpState.value
@@ -175,7 +158,6 @@ class AboutViewModel @Inject constructor(
             @Suppress("DEPRECATION")
             packageInfo?.versionCode?.toLong() ?: 0L
         }
-        val activation = runCatching { visionEngine.currentActivation() }.getOrNull()
         return DiagnosticsExporter.buildReport(
             versionName = versionName,
             versionCode = versionCode,
@@ -186,18 +168,6 @@ class AboutViewModel @Inject constructor(
                 lastError = mcp.lastError,
             ),
             debugFrameCount = mutableDebugFrameCount.value,
-            algorithm = activation?.let {
-                AlgorithmDiagnosticsSnapshot(
-                    algorithmId = it.profile.algorithmId,
-                    version = it.profile.version,
-                    generation = it.generation,
-                    usingBuiltinFallback = it.usingBuiltinFallback,
-                    loadError = it.loadError,
-                    nativeAvailable = NativeVision.isAvailable,
-                    pendingCatalogId = algorithmActivation.pendingCatalogId(),
-                    analysisRunning = algorithmActivation.isAnalysisRunning(),
-                )
-            },
             runtime = visionRuntime.status.value,
             appContext = appContext,
         )
@@ -217,11 +187,9 @@ fun AboutScreen(
 ) {
     val config by vm.config.collectAsState()
     val debugFrameCount by vm.debugFrameCount.collectAsState()
-    val benchmark by vm.benchmark.collectAsState()
     var donation by remember { mutableStateOf<DonationKind?>(null) }
     var developerPage by remember { mutableStateOf(false) }
     var logViewerPage by remember { mutableStateOf(false) }
-    var algorithmPipelinePage by remember { mutableStateOf(false) }
     var versionTapCount by remember { mutableIntStateOf(0) }
     var unlockMessage by remember { mutableStateOf<String?>(null) }
     val toastContext = LocalContext.current
@@ -244,19 +212,6 @@ fun AboutScreen(
         return
     }
 
-    if (algorithmPipelinePage && config.developer.enabled) {
-        AlgorithmPipelineScreen(
-            onBack = { algorithmPipelinePage = false },
-            onMessage = { msg ->
-                Toast.makeText(toastContext, msg, Toast.LENGTH_SHORT).show()
-            },
-            onOpenLogs = {
-                algorithmPipelinePage = false
-                logViewerPage = true
-            },
-        )
-        return
-    }
 
     if (developerPage && config.developer.enabled) {
         Scaffold(
@@ -279,13 +234,10 @@ fun AboutScreen(
                 config = config,
                 update = vm::update,
                 debugFrameCount = debugFrameCount,
-                benchmark = benchmark,
                 onRefreshDebugFrames = vm::refreshDebugFrameCount,
                 onClearDebugFrames = vm::clearDebugFrames,
-                onRunBenchmark = vm::runNativeBenchmark,
                 onBuildDiagnostics = vm::buildDiagnosticsReport,
                 onOpenLogViewer = { logViewerPage = true },
-                onOpenAlgorithmPipeline = { algorithmPipelinePage = true },
                 onMessage = { msg ->
                     Toast.makeText(toastContext, msg, Toast.LENGTH_SHORT).show()
                 },

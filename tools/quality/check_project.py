@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Single-module architecture, Android safety, MCP and native invariants."""
+"""Single-module architecture, Android safety, MCP and JinChanAI Clean Base invariants.
+
+Clean Base 阶段说明：
+- 本分支已清退 HZZS 原游戏视觉算法（算法包 / 内置识别 / Tracker / 算法市场 / 原生视觉引擎）。
+- 原 `native:*` / `algorithm:*` / `host-native:*` 检查随被测代码一起移除。
+- 新增 `cleanbase:*` 检查，确保清退结果不再回退。
+"""
 from __future__ import annotations
 
 import json
@@ -22,6 +28,8 @@ def read(path: str) -> str:
     check(target.exists(), f"file:{path}", "missing")
     return target.read_text(encoding="utf-8") if target.exists() else ""
 
+
+# ── Architecture ─────────────────────────────────────────────────────────────
 settings = read("settings.gradle.kts")
 modules = re.findall(r'include\("(:[^"]+)"\)', settings)
 check(modules == [":app"], "architecture:single-app-module", f"declared modules: {modules}")
@@ -34,24 +42,59 @@ for legacy in ("core", "domain", "data", "feature", "service", "native"):
         "legacy source module remains",
     )
 
+# ── Gradle ───────────────────────────────────────────────────────────────────
 app_build = read("app/build.gradle.kts")
-for token in ("minSdk = 24", "compileSdk = 37", "externalNativeBuild"):
+for token in ("minSdk = 24", "compileSdk = 37"):
     check(token in app_build, f"gradle:{token}", "expected build configuration missing")
-check("project(\"" not in app_build, "gradle:no-project-dependencies", "single module still depends on project modules")
+check(
+    "project(\"" not in app_build,
+    "gradle:no-project-dependencies",
+    "single module still depends on project modules",
+)
+check(
+    "androidTestImplementation(platform(libs.compose.bom))" in app_build,
+    "gradle:android-test-compose-bom",
+    "Compose Android-test dependencies require the BOM",
+)
+# Clean Base：不再声明原生构建，构建链不再需要 NDK/CMake。
+for token in ("externalNativeBuild", "ndkVersion", "abiFilters"):
+    check(
+        token not in app_build,
+        f"cleanbase:gradle-no-{token}",
+        f"{token} must be gone from app/build.gradle.kts",
+    )
 
+# ── Compose hygiene ──────────────────────────────────────────────────────────
 for source in (ROOT / "app/src/main/java").rglob("*.kt"):
     text = source.read_text(encoding="utf-8")
     relative = source.relative_to(ROOT)
     if "LazyColumn(" in text:
-        check("import androidx.compose.foundation.lazy.LazyColumn" in text, f"compose:{relative}:lazy-import", "missing import")
-    check("androidx.hilt.navigation.compose.hiltViewModel" not in text, f"compose:{relative}:hilt-import", "deprecated import")
-    check("top.azek431.hzzs.feature.about.R" not in text, f"resources:{relative}:single-R", "old module R reference")
+        check(
+            "import androidx.compose.foundation.lazy.LazyColumn" in text,
+            f"compose:{relative}:lazy-import",
+            "missing import",
+        )
+    check(
+        "androidx.hilt.navigation.compose.hiltViewModel" not in text,
+        f"compose:{relative}:hilt-import",
+        "deprecated import",
+    )
+    check(
+        "top.azek431.hzzs.feature.about.R" not in text,
+        f"resources:{relative}:single-R",
+        "old module R reference",
+    )
 
+# ── Manifest ─────────────────────────────────────────────────────────────────
 manifest_root = ET.parse(ROOT / "app/src/main/AndroidManifest.xml").getroot()
 application = manifest_root.find("application")
 check(application is not None, "manifest:application", "missing application")
 if application is not None:
-    check(application.attrib.get(ANDROID_NS + "usesCleartextTraffic") == "false", "manifest:https-only", "cleartext enabled")
+    check(
+        application.attrib.get(ANDROID_NS + "usesCleartextTraffic") == "false",
+        "manifest:https-only",
+        "cleartext enabled",
+    )
     exported = []
     for tag in ("activity", "service", "receiver", "provider"):
         for node in application.findall(tag):
@@ -74,12 +117,19 @@ for token in (
 ):
     check(token in manifest_text, f"manifest:{token}", "missing")
 
+# ── Config model ─────────────────────────────────────────────────────────────
 models = read("app/src/main/java/top/azek431/hzzs/core/model/AppModels.kt")
-for token in ("minSdk",):
-    pass
-for token in ("ASK_EVERY_TIME", "FULL_ACCESS", "OverlayStyle", "PlayerReferenceMode", "disabledObstacles"):
+for token in ("ASK_EVERY_TIME", "FULL_ACCESS", "OverlayStyle"):
     check(token in models, f"model:{token}", "configuration model missing")
+for token in ("JINCHAN_CLEAN_BASE = true", "ACTION_ENABLED = false", "OVERLAY_DEFAULT_ENABLED = false"):
+    check(token in models, f"cleanbase:model:{token}", "clean-base safety constant missing")
+check(
+    "AppConfig.OVERLAY_DEFAULT_ENABLED" in models,
+    "cleanbase:overlay-default-off",
+    "OverlayConfig default must follow OVERLAY_DEFAULT_ENABLED",
+)
 
+# ── Settings repository ──────────────────────────────────────────────────────
 settings_repo = read("app/src/main/java/top/azek431/hzzs/core/preferences/SettingsRepository.kt")
 for token in (
     "preview.value = null",
@@ -87,8 +137,6 @@ for token in (
     "MAX_CONFIG_BYTES",
 ):
     check(token in settings_repo, f"settings:{token}", "safety invariant missing")
-# 包名门控：默认不限制；用户显式 restrictPackages 时才限制。
-# 外部摄入不得静默关闭限制；开启限制时列表不得悄悄扩大（与 baseline 求交）。
 check(
     "restrictPackages" in settings_repo
     and "AutomationConfig.SUGGESTED_PACKAGES" in settings_repo
@@ -101,6 +149,7 @@ check(
     "safety invariant missing",
 )
 
+# ── Settings UI ──────────────────────────────────────────────────────────────
 settings_ui = read("app/src/main/java/top/azek431/hzzs/feature/settings/SettingsScreen.kt")
 settings_ui_dir = ROOT / "app/src/main/java/top/azek431/hzzs/feature/settings"
 settings_ui_all = settings_ui
@@ -130,16 +179,17 @@ check(
     "settings must not use clearPreviewSilently",
 )
 
+# ── Onboarding ───────────────────────────────────────────────────────────────
 onboarding = read("app/src/main/java/top/azek431/hzzs/feature/onboarding/OnboardingScreen.kt")
 for token in ("onboardingPageMetas", "acceptedDisclaimerVersion", "enabled = false", "onboarding_risk_wait"):
     check(token in onboarding, f"onboarding:{token}", "first-run invariant missing")
-# 倒计时文案已资源化；源码不得再硬编码「请等待 ${remaining}s」绕过 stringResource。
 check(
     "请等待 ${remaining}s" not in onboarding,
     "onboarding:no-hardcoded-wait",
     "onboarding risk wait must use stringResource",
 )
 
+# ── MCP transport + safety ───────────────────────────────────────────────────
 mcp_dir = ROOT / "app/src/main/java/top/azek431/hzzs/mcp"
 mcp = ""
 if mcp_dir.is_dir():
@@ -179,7 +229,6 @@ for token in (
     "set_mcp_tool_policy",
 ):
     check(token in mcp, f"mcp:{token}", "MCP control/safety invariant missing")
-# 默认仍须 loopback；允许源码出现 0.0.0.0 仅当用户显式 bindLocalhostOnly=false。
 check(
     "bindLocalhostOnly" in mcp and "127.0.0.1" in mcp and "0.0.0.0" in mcp,
     "mcp:loopback-default",
@@ -197,6 +246,7 @@ check(
     "tool inputSchema must not use additionalProperties:true",
 )
 
+# ── Capture ──────────────────────────────────────────────────────────────────
 capture = read("app/src/main/java/top/azek431/hzzs/service/capture/CaptureSources.kt")
 check(
     "import android.os.Process\n" not in capture,
@@ -209,7 +259,11 @@ check(
     "capture:java-process-contract",
     "root command helpers must use java.lang.Process explicitly",
 )
-auto = capture.split("class AutoFrameSource", 1)[1].split("class MediaProjectionFrameSource", 1)[0] if "class AutoFrameSource" in capture else ""
+auto = (
+    capture.split("class AutoFrameSource", 1)[1].split("class MediaProjectionFrameSource", 1)[0]
+    if "class AutoFrameSource" in capture
+    else ""
+)
 check("root" not in auto.lower() and "shizuku" not in auto.lower(), "capture:auto-low-permission", "AUTO escalates")
 for token in (
     "MAX_FRAME_DIMENSION = 4_096",
@@ -221,8 +275,6 @@ for token in (
     "destroyCompat()",
 ):
     check(token in capture, f"capture:{token}", "capture bound missing")
-
-
 check(
     "ActivityResultContracts.StartActivityForResult()" in capture
     and "startActivityForResult" not in capture
@@ -263,203 +315,98 @@ for context_file in (
         "Hilt qualifier must use an explicit Kotlin parameter target",
     )
 
+# ── Clean Base: removed algorithm artifacts must stay removed ────────────────
+removed_paths = (
+    "app/src/main/cpp",
+    "app/src/main/assets/algorithms",
+    "algorithm-packs",
+    "app/src/main/java/top/azek431/hzzs/core/algorithm",
+    "app/src/main/java/top/azek431/hzzs/domain/vision",
+    "app/src/main/java/top/azek431/hzzs/nativevision",
+    "app/src/main/java/top/azek431/hzzs/feature/settings/screens/AlgorithmSettingsScreen.kt",
+    "app/src/main/java/top/azek431/hzzs/feature/settings/screens/AlgorithmPipelineScreen.kt",
+    "app/src/main/java/top/azek431/hzzs/feature/settings/screens/DetectionSettingsScreen.kt",
+    "app/src/main/java/top/azek431/hzzs/feature/settings/components/AlgorithmComponents.kt",
+    "app/src/main/java/top/azek431/hzzs/mcp/executor/AlgorithmExecutor.kt",
+    "app/src/main/java/top/azek431/hzzs/data/vision/MultiObjectTracker.kt",
+    "app/src/main/java/top/azek431/hzzs/data/vision/NativeVisionEngine.kt",
+    "app/src/main/java/top/azek431/hzzs/data/vision/NativeBenchmarkRunner.kt",
+    "app/src/main/java/top/azek431/hzzs/data/vision/DefaultActiveAlgorithmProvider.kt",
+    "app/src/main/java/top/azek431/hzzs/domain/automation/TriggerDistanceAutoTuner.kt",
+    "tools/algorithm",
+    "tools/vision",
+    "tools/vision_v2",
+    "tools/vision_v3",
+    ".github/workflows/algorithm-release.yml",
+)
+for relative in removed_paths:
+    check(not (ROOT / relative).exists(), f"cleanbase:absent:{relative}", "algorithm artifact returned")
+
+# 生产源码不得再出现算法层的包引用或旧算法工具名。
+algorithm_tool_names = (
+    "list_algorithms",
+    "get_active_algorithm",
+    "get_algorithm_pipeline",
+    "set_active_algorithm",
+    "refresh_algorithm_catalog",
+    "download_algorithm",
+    "upgrade_algorithms",
+    "set_scene",
+    "set_obstacle_enabled",
+    "set_threshold",
+)
+check(
+    not any(name in mcp for name in algorithm_tool_names),
+    "cleanbase:mcp-no-algorithm-tools",
+    "algorithm MCP tools must be gone",
+)
+algorithm_packages = ("top.azek431.hzzs.core.algorithm", "top.azek431.hzzs.domain.vision", "top.azek431.hzzs.nativevision")
+for source in (ROOT / "app/src/main").rglob("*.kt"):
+    text = source.read_text(encoding="utf-8")
+    relative = source.relative_to(ROOT)
+    for package in algorithm_packages:
+        check(package not in text, f"cleanbase:no-import:{relative}:{package}", "algorithm package reference remains")
+
+runtime = read("app/src/main/java/top/azek431/hzzs/data/vision/VisionRuntimeController.kt")
+check(
+    "MultiObjectTracker" not in runtime and "VisionEngine" not in runtime,
+    "cleanbase:runtime-no-engine",
+    "runtime must stay capture-only",
+)
+check(
+    "cancelPendingActions" in runtime,
+    "cleanbase:runtime-cancel-actions",
+    "runtime must keep the MCP cancel_actions surface",
+)
+
+# 保留基础设施：截图 / 无障碍 / 手势 / Shizuku / MCP transport / 日志。
+for relative in (
+    "app/src/main/java/top/azek431/hzzs/service/capture/FrameCapture.kt",
+    "app/src/main/java/top/azek431/hzzs/service/capture/CaptureSources.kt",
+    "app/src/main/java/top/azek431/hzzs/service/automation/HzzsAccessibilityService.kt",
+    "app/src/main/java/top/azek431/hzzs/service/automation/GestureDispatcherFactory.kt",
+    "app/src/main/java/top/azek431/hzzs/service/automation/ShellGestureDispatchers.kt",
+    "app/src/main/java/top/azek431/hzzs/service/automation/ForegroundWindowProbe.kt",
+    "app/src/main/java/top/azek431/hzzs/platform/compat/CaptureCapabilities.kt",
+    "app/src/main/java/top/azek431/hzzs/platform/compat/GestureCapabilities.kt",
+    "app/src/main/java/top/azek431/hzzs/platform/compat/ShizukuHealthCheck.kt",
+    "app/src/main/java/top/azek431/hzzs/platform/compat/SystemCapabilityAccess.kt",
+    "app/src/main/java/top/azek431/hzzs/service/vision/VisionAnalysisForegroundService.kt",
+    "app/src/main/java/top/azek431/hzzs/mcp/McpService.kt",
+    "app/src/main/java/top/azek431/hzzs/mcp/McpProtocol.kt",
+    "app/src/main/java/top/azek431/hzzs/mcp/McpHttp.kt",
+    "app/src/main/java/top/azek431/hzzs/mcp/McpEventBus.kt",
+    "app/src/main/java/top/azek431/hzzs/mcp/McpSessionManager.kt",
+    "app/src/main/java/top/azek431/hzzs/core/logging/AppLog.kt",
+    "app/src/main/java/top/azek431/hzzs/core/logging/DiagnosticsExporter.kt",
+):
+    check((ROOT / relative).exists(), f"cleanbase:keep:{relative}", "infrastructure file missing")
+
 gitignore = read(".gitignore")
 check(
     ".hzzs-test-results/" in gitignore,
     "gitignore:test-results",
     "generated test results must remain outside Git",
-)
-
-check(
-    "androidTestImplementation(platform(libs.compose.bom))"
-    in app_build,
-    "gradle:android-test-compose-bom",
-    "Compose Android-test dependencies require the BOM",
-)
-
-debug_frame_recorder = read(
-    "app/src/main/java/top/azek431/hzzs/"
-    "data/vision/DebugFrameRecorder.kt"
-)
-check(
-    "@ApplicationContext context: Context"
-    in debug_frame_recorder,
-    "kotlin:debug-recorder-context-target",
-    "non-property constructor parameter uses direct qualifier",
-)
-
-runtime = read("app/src/main/java/top/azek431/hzzs/data/vision/VisionRuntimeController.kt")
-for token in (
-    "restart()",
-    "fixedPlayerReference",
-    "detectedPlayerReference",
-    "disclaimerAcceptedVersion",
-    "effectiveCaptureBackend",
-):
-    check(token in runtime, f"runtime:{token}", "runtime behavior missing")
-
-
-debug_recorder = read("app/src/main/java/top/azek431/hzzs/data/vision/DebugFrameRecorder.kt")
-for token in (
-    "MIN_INTERVAL_NANOS",
-    "MAX_FILES = 20",
-    "context.filesDir",
-    "pixels.copyOf()",
-):
-    check(token in debug_recorder, f"debug-frame:{token}", "bounded private debug capture invariant missing")
-
-benchmark = read("app/src/main/java/top/azek431/hzzs/data/vision/NativeBenchmarkRunner.kt")
-for token in ("NativeVision.analyze", "requestedIterations.coerceIn(10, 1_000)", "p95Ms"):
-    check(token in benchmark, f"native-benchmark:{token}", "on-device native benchmark invariant missing")
-
-native_boundary = read("app/src/main/java/top/azek431/hzzs/nativevision/NativeVision.kt")
-for token in ("isAvailable", "loadFailureMessage", "runCatching"):
-    check(token in native_boundary, f"native-loader:{token}", "native linker failure is not contained")
-
-native_kt = read("app/src/main/java/top/azek431/hzzs/data/vision/NativeVisionEngine.kt")
-for token in ("enabledKindMask", "detectPlayer", "fixedPlayerXRatio", "NativeVision.isAvailable"):
-    check(token in native_kt, f"native-bridge:{token}", "native option not forwarded")
-
-# 算法诊断（StageTiming / MulticolorDiag / FilteredDetection）由 C++ 回传、默认关闭：
-# - C++ 侧必须完成各阶段采样（now_ns）
-# - jni_bridge 必须透传 timing 与诊断数组
-native_diag = read("app/src/main/cpp/jni_bridge.cpp")
-for token in ("StageTiming", "MulticolorDiag", "FilteredDetection", "now_ns"):
-    check(token in native_diag, f"native-diag:{token}", "algorithm diagnostic bridge invariant missing")
-native_diag_without_line_comments = re.sub(r"//.*", "", native_diag)
-native_diag_compact = re.sub(r"\s+", "", native_diag_without_line_comments)
-for owner, descriptor in (
-    ("detection_class", "(IIIFFFFFZZI)V"),
-    ("fd_class", "(IIIFFFFFZZII)V"),
-):
-    expected_ctor = f'env->GetMethodID({owner},"<init>","{descriptor}")'
-    check(
-        expected_ctor in native_diag_compact,
-        f"native-jni-descriptor:{owner}",
-        "DetectionSource JNI constructor descriptor is out of sync",
-    )
-for stale_descriptor in ("(IIIFFFFFFZZI)V", "(IIFFFFFZZII)V"):
-    check(
-        stale_descriptor not in native_diag_compact,
-        f"native-jni-no-stale-descriptor:{stale_descriptor}",
-        "stale DetectionSource JNI constructor descriptor remains",
-    )
-for name, expected_args in (
-    (
-        "detection",
-        "env->NewObject(detection_class,detection_ctor,d.track_hint,"
-        "static_cast<jint>(d.kind),static_cast<jint>(d.source),"
-        "d.bounds.left,d.bounds.top,d.bounds.right,d.bounds.bottom,d.confidence,"
-        "static_cast<jboolean>(d.actionable),static_cast<jboolean>(d.diagnostic_only),"
-        "static_cast<jint>(d.avoidance))",
-    ),
-    (
-        "filtered-detection",
-        "env->NewObject(fd_class,fd_ctor,static_cast<jint>(f.detection.track_hint),"
-        "static_cast<jint>(f.detection.kind),static_cast<jint>(f.detection.source),"
-        "f.detection.bounds.left,f.detection.bounds.top,f.detection.bounds.right,"
-        "f.detection.bounds.bottom,f.detection.confidence,"
-        "static_cast<jboolean>(f.detection.actionable),"
-        "static_cast<jboolean>(f.detection.diagnostic_only),"
-        "static_cast<jint>(f.detection.avoidance),"
-        "static_cast<jint>(static_cast<int32_t>(f.reason)))",
-    ),
-):
-    check(
-        expected_args in native_diag_compact,
-        f"native-jni-args:{name}",
-        "DetectionSource JNI argument order is out of sync",
-    )
-
-native_boundary_compact = re.sub(r"\s+", "", re.sub(r"//.*", "", native_boundary))
-for name, expected_layout in (
-    (
-        "detection",
-        "dataclassDetection(valtrackHint:Int,valkind:Int,valsource:Int,valleft:Float,"
-        "valtop:Float,valright:Float,valbottom:Float,valconfidence:Float,"
-        "valactionable:Boolean,valdiagnosticOnly:Boolean,valavoidance:Int,)",
-    ),
-    (
-        "filtered-detection",
-        "dataclassFilteredDetection(valtrackHint:Int,valkind:Int,valsource:Int,valleft:Float,"
-        "valtop:Float,valright:Float,valbottom:Float,valconfidence:Float,"
-        "valactionable:Boolean,valdiagnosticOnly:Boolean,valavoidance:Int,valreason:Int,)",
-    ),
-):
-    check(
-        expected_layout in native_boundary_compact,
-        f"native-kotlin-layout:{name}",
-        "NativeVision DetectionSource field order is out of sync",
-    )
-
-jni = read("app/src/main/cpp/jni_bridge.cpp")
-engine = read("app/src/main/cpp/vision_engine.cpp")
-for token in (
-    "kMaximumDimension = 4096",
-    "kMaximumPixels",
-    "enabled_kind_mask",
-    "detect_player",
-    "GetPrimitiveArrayCritical",
-    "CriticalIntArray",
-):
-    check(token in jni or token in engine, f"native:{token}", "native safety/feature missing")
-
-for rules in ("app/src/main/res/xml/backup_rules.xml", "app/src/main/res/xml/data_extraction_rules.xml"):
-    text = read(rules)
-    check("hzzs_settings_v5.preferences_pb" in text, f"backup:{rules}:v5", "current DataStore file is not covered")
-    check("hzzs_settings_v3.preferences_pb" not in text, f"backup:{rules}:no-v3", "stale DataStore backup rule remains")
-
-for name in ("README.md", "CLAUDE.md", "app/README.md", "app/CLAUDE.md", "app/src/main/cpp/README.md", "app/src/main/cpp/CLAUDE.md"):
-    check((ROOT / name).exists(), f"docs:{name}", "AI-readable documentation missing")
-
-build_workflow = read(".github/workflows/build.yml")
-for token in ("check_project.py", "run_native_sanitizers.sh", "testDebugUnitTest", "lintDebug", "assembleDebug"):
-    check(token in build_workflow, f"ci:{token}", "quality gate missing")
-
-# 宿主机 g++ 脚本必须与 CMakeLists 同源：含 legacy_main 主检测路径与对应 include。
-cmake_native = read("app/src/main/cpp/CMakeLists.txt")
-for host_script in ("tools/vision/run_native_sanitizers.sh", "tools/vision/build_host.sh"):
-    host_text = read(host_script)
-    for token in (
-        "legacy_main/vision2",
-        "legacy_main/vision_bamboo",
-        "vision_v3",
-        "HzzsVisionCore.cpp",
-        "BambooVisionCore.cpp",
-        "BambooVisionEngine.cpp",
-        "sea_salt_v3.cpp",
-        "sea_salt_fast.cpp",
-        "soy_sauce_exact.cpp",
-    ):
-        check(token in host_text, f"host-native:{host_script}:{token}", "host build diverged from CMake")
-    check(
-        all(path in cmake_native for path in (
-            "legacy_main/vision2",
-            "legacy_main/vision_bamboo",
-            "vision_v3/sea_salt_v3.cpp",
-            "vision_v3/sea_salt_fast.cpp",
-            "vision_v3/soy_sauce_exact.cpp",
-        )),
-        "host-native:cmake-sources",
-        "CMake missing legacy_main or vision_v3 sources",
-    )
-
-host_api = re.sub(r"\s+", "", read("tools/vision/host_api.cpp"))
-host_tests = re.sub(r"\s+", "", read("tools/vision/run_host_tests.py"))
-expected_host_cpp_abi = (
-    'extern"C"inthzzs_analyze_host_config(intscene,constuint32_t*pixels,intwidth,intheight,'
-    'intwork_width,intenabled_kind_mask,booldetect_player,floatfixed_player_x_ratio,'
-    'constchar*backend_id,float*output,intmax_detections)'
-)
-expected_host_ctypes_abi = (
-    "analyze_config.argtypes=[ctypes.c_int,ctypes.POINTER(ctypes.c_uint32),ctypes.c_int,"
-    "ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_bool,ctypes.c_float,ctypes.c_char_p,"
-    "ctypes.POINTER(ctypes.c_float),ctypes.c_int,]"
-)
-check(
-    expected_host_cpp_abi in host_api and expected_host_ctypes_abi in host_tests,
-    "host-native:backend-id-abi",
-    "host C++ and ctypes argument order diverged",
 )
 
 result = {"status": "PASS" if not ERRORS else "FAIL", "checks": len(CHECKS), "errors": ERRORS}

@@ -29,11 +29,6 @@ abstract class ToolExecutorBindings {
     @Binds
     @IntoSet
     @Singleton
-    abstract fun bindAlgorithm(impl: AlgorithmExecutor): ToolExecutor
-
-    @Binds
-    @IntoSet
-    @Singleton
     abstract fun bindMcpSelfManagement(impl: McpSelfManagementExecutor): ToolExecutor
 
     @Binds

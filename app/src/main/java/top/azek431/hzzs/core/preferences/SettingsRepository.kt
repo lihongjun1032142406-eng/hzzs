@@ -172,16 +172,6 @@ class DataStoreSettingsRepository @Inject constructor(
         context.settingsDataStore.edit { it[configKey] = ConfigJson.encode(safe) }
         savedCache.set(safe)
         val activePreview = preview.value
-        if (activePreview != null) {
-            // 草稿保留用户其它字段；仅同步自调写入的触发距离，避免保存草稿时回退。
-            preview.value = activePreview.copy(
-                automation = activePreview.automation.copy(
-                    sweetTriggerDistancePlayerWidths = safe.automation.sweetTriggerDistancePlayerWidths,
-                    bambooTriggerDistancePlayerWidths = safe.automation.bambooTriggerDistancePlayerWidths,
-                    seaSaltTriggerDistancePlayerWidths = safe.automation.seaSaltTriggerDistancePlayerWidths,
-                ),
-            ).validated()
-        }
         // 有草稿时日志仍跟已保存开发者开关，不因 preview 改变 logLevel。
         syncLogging(safe)
         AppLog.i(
@@ -237,7 +227,7 @@ class DataStoreSettingsRepository @Inject constructor(
     /**
      * 一次性迁移旧 SharedPreferences（`hzzs_runtime_v2`）。
      *
-     * 仅迁移低风险项（截图后端、赛季、视口、悬浮窗开关）。
+     * 仅迁移低风险项（截图后端、视口、悬浮窗开关）。
      * **永不**通过迁移开启自动操作或 Root，避免升级静默提权。
      */
     private suspend fun migrateLegacyOnce(): Unit = migrationMutex.withLock {
@@ -247,17 +237,11 @@ class DataStoreSettingsRepository @Inject constructor(
             null
         } else {
             val mode = legacy.getString("capture_mode", "AUTO").orEmpty().uppercase()
-            val algorithm = legacy.getString("vision_algorithm", "").orEmpty().lowercase()
             AppConfig(
                 captureBackend = when {
                     "ACCESS" in mode -> CaptureBackend.ACCESSIBILITY
                     "MEDIA" in mode -> CaptureBackend.MEDIA_PROJECTION
                     else -> CaptureBackend.AUTO
-                },
-                selectedScene = if ("bamboo" in algorithm || "竹" in algorithm) {
-                    SceneId.BAMBOO_BOOKSTORE
-                } else {
-                    SceneId.SWEET_FACTORY
                 },
                 viewport = parseLegacyViewport(legacy.getString("viewport", null)),
                 overlay = OverlayConfig(
@@ -384,33 +368,10 @@ fun ViewportConfig.validated(): ViewportConfig {
     }
 }
 
-/** 各赛季算法引擎可识别的障碍集合（与 C++ 三槽参数绑定一致）。 */
-fun obstaclesForScene(scene: SceneId): Set<ObstacleKind> = when (scene) {
-    SceneId.SWEET_FACTORY -> setOf(
-        ObstacleKind.GREEN_BOTTLE,
-        ObstacleKind.CAKE_STRUCTURE,
-        ObstacleKind.HANGING_SPIKE,
-        ObstacleKind.PIT,
-    )
-    SceneId.BAMBOO_BOOKSTORE -> setOf(
-        ObstacleKind.PANDA_STATUE,
-        ObstacleKind.BAMBOO_GAP,
-        ObstacleKind.HANGING_BRUSH,
-        ObstacleKind.PIT,
-    )
-    SceneId.SEA_SALT_LIVING_ROOM -> setOf(
-        ObstacleKind.SAND_CASTLE,
-        ObstacleKind.HANGING_ANCHOR,
-        ObstacleKind.SEA_PIT,
-        ObstacleKind.PIT,
-    )
-}
-
 /**
  * 将任意 [AppConfig] 清洗为可安全落盘/生效的快照。
  *
  * 关键策略：
- * - 补齐全部赛季配置，并过滤掉不属于该赛季的障碍关闭项
  * - 数值 clamp 到产品允许区间
  * - 自动操作：免责声明版本不足时强制 `enabled=false`
  * - 包名与默认白名单求交
@@ -421,25 +382,6 @@ fun obstaclesForScene(scene: SceneId): Set<ObstacleKind> = when (scene) {
  * 外部 JSON / MCP 摄入请再经 [hardenedForExternalIngest]，避免静默开启自动操作、局域网监听或自提 MCP 权限。
  */
 fun AppConfig.validated(): AppConfig {
-    val completeScenes = SceneId.entries.associateWith { id ->
-        val scene = scenes[id] ?: SceneConfig(id)
-        scene.copy(
-            sceneId = id,
-            // 只保留当前赛季合法障碍，防止跨赛季脏数据。
-            disabledObstacles = scene.disabledObstacles.filterTo(mutableSetOf()) { obstacle ->
-                obstacle in obstaclesForScene(id)
-            },
-            thresholds = scene.thresholds.copy(
-                workWidth = scene.thresholds.workWidth.coerceIn(192, 960),
-                minimumConfidence = scene.thresholds.minimumConfidence.finiteOr(0.72f).coerceIn(0.1f, 1f),
-                stableFrames = scene.thresholds.stableFrames.coerceIn(1, 12),
-                fixedPlayerXRatio = scene.thresholds.fixedPlayerXRatio.finiteOr(0.185f).coerceIn(0.05f, 0.45f),
-                behindPlayerMarginRatio = scene.thresholds.behindPlayerMarginRatio.finiteOr(0.018f).coerceIn(0f, 0.2f),
-                boundaryTolerancePlayerWidthRatio = scene.thresholds.boundaryTolerancePlayerWidthRatio
-                    .finiteOr(0.05f).coerceIn(0.01f, 0.25f),
-            ),
-        )
-    }
     // 清洗包名；开启限制时列表不能为空，空则回退建议包。不与内置集合求交。
     val packages: Set<String> = automation.allowedPackages
         .asSequence()
@@ -470,7 +412,6 @@ fun AppConfig.validated(): AppConfig {
             strokeWidthDp = overlay.strokeWidthDp.finiteOr(2f).coerceIn(0.5f, 8f),
             textScale = overlay.textScale.finiteOr(1f).coerceIn(0.75f, 2f),
         ),
-        scenes = completeScenes,
         automation = automation.copy(
             // 免责声明未达当前版本时强制关闭，导入也走同一路径。
             enabled = automation.enabled &&
@@ -479,21 +420,8 @@ fun AppConfig.validated(): AppConfig {
             restrictPackages = automation.restrictPackages,
             allowedPackages = packages,
             maxActionsPerSecond = automation.maxActionsPerSecond.coerceIn(1, 8),
-            minimumSceneConfidence = automation.minimumSceneConfidence.finiteOr(0.55f).coerceIn(0.5f, 1f),
             retryLimit = automation.retryLimit.coerceIn(0, 2),
             disclaimerAcceptedVersion = automation.disclaimerAcceptedVersion.coerceAtLeast(0),
-            bambooExperimentalAutoAction = automation.bambooExperimentalAutoAction,
-            sweetTriggerDistancePlayerWidths = automation.sweetTriggerDistancePlayerWidths
-                .finiteOr(1.50f)
-                .coerceIn(0.5f, 8f),
-            bambooTriggerDistancePlayerWidths = automation.bambooTriggerDistancePlayerWidths
-                .finiteOr(1.35f)
-                .coerceIn(0.5f, 8f),
-            // 海盐默认 5.0：FIXED 玩家宽约 0.05 时约 0.25 屏宽，对齐酱油较远点击；上限放宽到 8。
-            seaSaltTriggerDistancePlayerWidths = automation.seaSaltTriggerDistancePlayerWidths
-                .finiteOr(5.0f)
-                .coerceIn(0.5f, 8f),
-            autoAdjustTriggerDistance = automation.autoAdjustTriggerDistance,
             // 自动复活与障碍连点独立；默认开，导入允许保持（风险低于连跳）。
             autoReviveEnabled = automation.autoReviveEnabled,
         ),
@@ -524,20 +452,11 @@ fun AppConfig.validated(): AppConfig {
         ),
         developer = developer.copy(
             frameRateLimit = developer.frameRateLimit.coerceIn(1, 120),
-            nativeBenchmarkIterations = developer.nativeBenchmarkIterations.coerceIn(10, 10_000),
             logLevel = developer.logLevel,
             logRingCapacity = developer.logRingCapacity.coerceIn(500, 3000),
-            enableStageTiming = developer.enableStageTiming,
-            enableMulticolorDiagnostic = developer.enableMulticolorDiagnostic,
-            enableFilterTrace = developer.enableFilterTrace,
         ),
         onboarding = onboarding.copy(
             acceptedDisclaimerVersion = onboarding.acceptedDisclaimerVersion.coerceAtLeast(0),
-        ),
-        algorithm = algorithm.copy(
-            pinnedAlgorithmId = algorithm.pinnedAlgorithmId
-                ?.trim()
-                ?.takeIf { it.length in 1..96 },
         ),
     )
 }
@@ -610,9 +529,6 @@ fun AppConfig.hardenedForExternalIngest(
             base.automation.gestureBackend,
             candidate.automation.gestureBackend,
         ),
-        bambooExperimentalAutoAction =
-            candidate.automation.bambooExperimentalAutoAction &&
-                base.automation.bambooExperimentalAutoAction,
         // 外部不得静默关闭包限制；开启限制时列表不得悄悄扩大。
         restrictPackages = candidate.automation.restrictPackages || base.automation.restrictPackages,
         allowedPackages = if (base.automation.restrictPackages || candidate.automation.restrictPackages) {
@@ -763,8 +679,6 @@ object ConfigJson {
             put("schemaVersion", safe.schemaVersion)
             put("theme", themeJson(safe.theme))
             put("overlay", overlayJson(safe.overlay))
-            put("gameProfile", safe.gameProfile.name)
-            put("selectedScene", safe.selectedScene.name)
             put("captureBackend", safe.captureBackend.name)
             put("viewport", JSONObject().apply {
                 put("left", safe.viewport.left.toDouble())
@@ -772,46 +686,14 @@ object ConfigJson {
                 put("right", safe.viewport.right.toDouble())
                 put("bottom", safe.viewport.bottom.toDouble())
             })
-            put("scenes", JSONArray().apply {
-                SceneId.entries.forEach { id ->
-                    val scene = safe.scenes.getValue(id)
-                    put(JSONObject().apply {
-                        put("sceneId", id.name)
-                        put("enabled", scene.enabled)
-                        put("disabledObstacles", JSONArray(scene.disabledObstacles.map { it.name }.sorted()))
-                        put("workWidth", scene.thresholds.workWidth)
-                        put("minimumConfidence", scene.thresholds.minimumConfidence.toDouble())
-                        put("stableFrames", scene.thresholds.stableFrames)
-                        put("playerReferenceMode", scene.thresholds.playerReferenceMode.name)
-                        put("fixedPlayerXRatio", scene.thresholds.fixedPlayerXRatio.toDouble())
-                        put("behindPlayerMarginRatio", scene.thresholds.behindPlayerMarginRatio.toDouble())
-                        put("boundaryTolerancePlayerWidthRatio", scene.thresholds.boundaryTolerancePlayerWidthRatio.toDouble())
-                    })
-                }
-            })
             put("automation", JSONObject().apply {
                 put("enabled", safe.automation.enabled)
                 put("disclaimerAcceptedVersion", safe.automation.disclaimerAcceptedVersion)
                 put("gestureBackend", safe.automation.gestureBackend.name)
-                put("bambooExperimentalAutoAction", safe.automation.bambooExperimentalAutoAction)
                 put("restrictPackages", safe.automation.restrictPackages)
                 put("allowedPackages", JSONArray(safe.automation.allowedPackages.sorted()))
                 put("maxActionsPerSecond", safe.automation.maxActionsPerSecond)
-                put("minimumSceneConfidence", safe.automation.minimumSceneConfidence.toDouble())
                 put("retryLimit", safe.automation.retryLimit)
-                put(
-                    "sweetTriggerDistancePlayerWidths",
-                    safe.automation.sweetTriggerDistancePlayerWidths.toDouble(),
-                )
-                put(
-                    "bambooTriggerDistancePlayerWidths",
-                    safe.automation.bambooTriggerDistancePlayerWidths.toDouble(),
-                )
-                put(
-                    "seaSaltTriggerDistancePlayerWidths",
-                    safe.automation.seaSaltTriggerDistancePlayerWidths.toDouble(),
-                )
-                put("autoAdjustTriggerDistance", safe.automation.autoAdjustTriggerDistance)
                 put("autoReviveEnabled", safe.automation.autoReviveEnabled)
             })
             put("mcp", JSONObject().apply {
@@ -839,12 +721,8 @@ object ConfigJson {
                 put("saveDebugFrames", safe.developer.saveDebugFrames)
                 put("showCoordinateGrid", safe.developer.showCoordinateGrid)
                 put("frameRateLimit", safe.developer.frameRateLimit)
-                put("nativeBenchmarkIterations", safe.developer.nativeBenchmarkIterations)
                 put("logLevel", safe.developer.logLevel.name)
                 put("logRingCapacity", safe.developer.logRingCapacity)
-                put("enableStageTiming", safe.developer.enableStageTiming)
-                put("enableMulticolorDiagnostic", safe.developer.enableMulticolorDiagnostic)
-                put("enableFilterTrace", safe.developer.enableFilterTrace)
             })
             put("onboarding", JSONObject().apply {
                 put("completed", safe.onboarding.completed)
@@ -856,13 +734,6 @@ object ConfigJson {
                 put("wifiOnly", safe.update.wifiOnly)
                 put("sourcePreference", safe.update.sourcePreference.name)
                 safe.update.ignoredVersionCode?.let { put("ignoredVersionCode", it) }
-            })
-            put("algorithm", JSONObject().apply {
-                put("selectionMode", safe.algorithm.selectionMode.name)
-                safe.algorithm.pinnedAlgorithmId?.let { put("pinnedAlgorithmId", it) }
-                put("channel", safe.algorithm.channel.name)
-                put("autoCheck", safe.algorithm.autoCheck)
-                put("autoDownload", safe.algorithm.autoDownload)
             })
         }.toString(2)
     }
@@ -879,31 +750,6 @@ object ConfigJson {
         val developer = root.optJSONObject("developer")
         val onboarding = root.optJSONObject("onboarding")
         val update = root.optJSONObject("update")
-        val algorithm = root.optJSONObject("algorithm")
-        val parsedScenes = mutableMapOf<SceneId, SceneConfig>()
-        val scenes = root.optJSONArray("scenes") ?: JSONArray()
-        repeat(minOf(scenes.length(), SceneId.entries.size * 2)) { index ->
-            val value = scenes.optJSONObject(index) ?: return@repeat
-            val id = enumOr(value.optString("sceneId"), SceneId.SWEET_FACTORY)
-            parsedScenes[id] = SceneConfig(
-                sceneId = id,
-                enabled = value.optBoolean("enabled", true),
-                disabledObstacles = value.optJSONArray("disabledObstacles").toEnumSet(),
-                thresholds = VisionThresholds(
-                    workWidth = value.optInt("workWidth", 384),
-                    minimumConfidence = value.optDouble("minimumConfidence", 0.72).toFloat(),
-                    stableFrames = value.optInt("stableFrames", 2),
-                    playerReferenceMode = enumOr(
-                        value.optString("playerReferenceMode"),
-                        PlayerReferenceMode.FIXED_RATIO,
-                    ),
-                    fixedPlayerXRatio = value.optDouble("fixedPlayerXRatio", 0.185).toFloat(),
-                    behindPlayerMarginRatio = value.optDouble("behindPlayerMarginRatio", 0.018).toFloat(),
-                    boundaryTolerancePlayerWidthRatio = value
-                        .optDouble("boundaryTolerancePlayerWidthRatio", 0.05).toFloat(),
-                ),
-            )
-        }
         return defaults.copy(
             theme = defaults.theme.copy(
                 mode = enumOr(theme?.optString("mode"), defaults.theme.mode),
@@ -937,8 +783,6 @@ object ConfigJson {
                 snapToEdge = overlay?.optBoolean("snapToEdge", true) ?: true,
                 lockPosition = overlay?.optBoolean("lockPosition", false) ?: false,
             ),
-            gameProfile = enumOr(root.optString("gameProfile"), defaults.gameProfile),
-            selectedScene = enumOr(root.optString("selectedScene"), defaults.selectedScene),
             captureBackend = enumOr(root.optString("captureBackend"), defaults.captureBackend),
             viewport = ViewportConfig(
                 left = viewport?.optDouble("left", 0.0)?.toFloat() ?: 0f,
@@ -946,7 +790,6 @@ object ConfigJson {
                 right = viewport?.optDouble("right", 1.0)?.toFloat() ?: 1f,
                 bottom = viewport?.optDouble("bottom", 1.0)?.toFloat() ?: 1f,
             ),
-            scenes = SceneId.entries.associateWith { parsedScenes[it] ?: SceneConfig(it) },
             automation = defaults.automation.copy(
                 enabled = automation?.optBoolean("enabled", false) ?: false,
                 disclaimerAcceptedVersion = automation?.optInt("disclaimerAcceptedVersion", 0) ?: 0,
@@ -954,23 +797,12 @@ object ConfigJson {
                     automation?.optString("gestureBackend"),
                     defaults.automation.gestureBackend,
                 ),
-                bambooExperimentalAutoAction =
-                    automation?.optBoolean("bambooExperimentalAutoAction", false) ?: false,
                 // 缺字段默认 false：与产品「默认不限制包名」一致。
                 restrictPackages = automation?.optBoolean("restrictPackages", false) ?: false,
                 allowedPackages = automation?.optJSONArray("allowedPackages").toStringSet()
                     .ifEmpty { defaults.automation.allowedPackages },
                 maxActionsPerSecond = automation?.optInt("maxActionsPerSecond", 4) ?: 4,
-                minimumSceneConfidence = automation?.optDouble("minimumSceneConfidence", 0.55)?.toFloat() ?: 0.55f,
                 retryLimit = automation?.optInt("retryLimit", 1) ?: 1,
-                sweetTriggerDistancePlayerWidths =
-                    automation?.optDouble("sweetTriggerDistancePlayerWidths", 1.50)?.toFloat() ?: 1.50f,
-                bambooTriggerDistancePlayerWidths =
-                    automation?.optDouble("bambooTriggerDistancePlayerWidths", 1.35)?.toFloat() ?: 1.35f,
-                seaSaltTriggerDistancePlayerWidths =
-                    automation?.optDouble("seaSaltTriggerDistancePlayerWidths", 5.0)?.toFloat() ?: 5.0f,
-                autoAdjustTriggerDistance =
-                    automation?.optBoolean("autoAdjustTriggerDistance", true) ?: true,
                 autoReviveEnabled = automation?.optBoolean("autoReviveEnabled", true) ?: true,
             ),
             mcp = defaults.mcp.copy(
@@ -997,7 +829,6 @@ object ConfigJson {
                 saveDebugFrames = developer?.optBoolean("saveDebugFrames", false) ?: false,
                 showCoordinateGrid = developer?.optBoolean("showCoordinateGrid", false) ?: false,
                 frameRateLimit = developer?.optInt("frameRateLimit", 60) ?: 60,
-                nativeBenchmarkIterations = developer?.optInt("nativeBenchmarkIterations", 200) ?: 200,
                 logLevel = developer?.optString("logLevel")
                     ?.takeIf(String::isNotBlank)
                     ?.let { raw -> AppLogLevel.entries.firstOrNull { it.name == raw } }
@@ -1006,12 +837,6 @@ object ConfigJson {
                     "logRingCapacity",
                     defaults.developer.logRingCapacity,
                 ) ?: defaults.developer.logRingCapacity,
-                enableStageTiming = developer?.optBoolean("enableStageTiming", false) ?: false,
-                enableMulticolorDiagnostic = developer?.optBoolean(
-                    "enableMulticolorDiagnostic",
-                    false,
-                ) ?: false,
-                enableFilterTrace = developer?.optBoolean("enableFilterTrace", false) ?: false,
             ),
             onboarding = defaults.onboarding.copy(
                 completed = onboarding?.optBoolean("completed", false) ?: false,
@@ -1027,17 +852,6 @@ object ConfigJson {
                 ),
                 ignoredVersionCode = update?.takeIf { it.has("ignoredVersionCode") }
                     ?.optLong("ignoredVersionCode"),
-            ),
-            algorithm = defaults.algorithm.copy(
-                selectionMode = enumOr(
-                    algorithm?.optString("selectionMode"),
-                    defaults.algorithm.selectionMode,
-                ),
-                pinnedAlgorithmId = algorithm?.optString("pinnedAlgorithmId")
-                    ?.takeIf(String::isNotBlank),
-                channel = enumOr(algorithm?.optString("channel"), defaults.algorithm.channel),
-                autoCheck = algorithm?.optBoolean("autoCheck", true) ?: true,
-                autoDownload = algorithm?.optBoolean("autoDownload", false) ?: false,
             ),
         ).validated()
     }
@@ -1101,13 +915,6 @@ object ConfigJson {
         }
     }
 
-    private inline fun <reified T : Enum<T>> JSONArray?.toEnumSet(): Set<T> = buildSet {
-        val array = this@toEnumSet ?: return@buildSet
-        repeat(minOf(array.length(), 64)) {
-            enumValues<T>().firstOrNull { value -> value.name == array.optString(it) }?.let(::add)
-        }
-    }
-
     private inline fun <reified T : Enum<T>> enumOr(raw: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == raw } ?: fallback
 
@@ -1121,17 +928,12 @@ object ConfigJson {
 fun AppConfig.diff(other: AppConfig): List<String> = buildList {
     if (theme != other.theme) add("外观主题")
     if (overlay != other.overlay) add("悬浮窗")
-    if (selectedScene != other.selectedScene) add("赛季")
     if (captureBackend != other.captureBackend) add("截图方式")
     if (viewport != other.viewport) add("游戏画面区域")
-    SceneId.entries.forEach { id ->
-        if (scenes[id] != other.scenes[id]) add("${id.displayName()} 识别参数")
-    }
     if (automation != other.automation) add("自动操作")
     if (mcp != other.mcp) add("MCP 服务")
     if (developer != other.developer) add("开发者设置")
     if (update != other.update) add("更新设置")
-    if (algorithm != other.algorithm) add("算法与识别")
 }
 
 @Module

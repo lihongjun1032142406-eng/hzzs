@@ -56,7 +56,6 @@ import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.OverlayBlockReason
 import top.azek431.hzzs.core.model.RuntimeStatus
 import top.azek431.hzzs.core.model.displayName
-import top.azek431.hzzs.core.model.humanizeAutomationDecision
 import top.azek431.hzzs.core.preferences.SettingsRepository
 import top.azek431.hzzs.data.vision.VisionRuntimeController
 import top.azek431.hzzs.platform.compat.SystemCapabilityAccess
@@ -121,7 +120,7 @@ fun RuntimeScreen(vm: RuntimeViewModel = hiltViewModel()) {
                     } else {
                         stringResource(R.string.runtime_hero_stopped)
                     },
-                    subtitle = "${status.activeScene.displayName()} · ${status.activeBackend.displayName()}",
+                    subtitle = status.activeBackend.displayName(),
                     icon = if (status.running) Icons.Rounded.Visibility else Icons.Rounded.Stop,
                 ) {
                     HzzsStatusStrip {
@@ -157,16 +156,6 @@ fun RuntimeScreen(vm: RuntimeViewModel = hiltViewModel()) {
                             MetricTile(
                                 label = stringResource(R.string.runtime_metric_fps),
                                 value = "${"%.1f".format(status.fps)}",
-                                modifier = Modifier.weight(1f),
-                            )
-                            MetricTile(
-                                label = stringResource(R.string.runtime_metric_ms),
-                                value = "${"%.1f".format(status.processingMs)}",
-                                modifier = Modifier.weight(1f),
-                            )
-                            MetricTile(
-                                label = stringResource(R.string.runtime_metric_obstacles),
-                                value = "${status.obstacleCount}",
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -232,21 +221,6 @@ fun RuntimeScreen(vm: RuntimeViewModel = hiltViewModel()) {
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        val decision = status.lastAutomationDecision
-                        if (status.running && !decision.isNullOrBlank()) {
-                            Text(
-                                stringResource(R.string.runtime_automation_last_decision, decision),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                            Text(
-                                humanizeAutomationDecision(decision),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
                     }
                 }
             }

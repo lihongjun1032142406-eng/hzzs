@@ -274,57 +274,8 @@ fun AutomationSettingsScreen(
         }
         item {
             SettingsSectionCard(
-                title = "触发距离（玩家宽度倍数）",
-                description = "障碍进入玩家前方该倍数距离内才规划动作。范围 0.5–8.0。" +
-                    "海盐默认约 5 倍（FIXED 玩家宽时约 0.25 屏宽），过小会出现「框已稳却不动作」。",
-            ) {
-                SettingsSwitchRow(
-                    title = "运行中自动微调触发距离",
-                    subtitle = if (config.automation.autoAdjustTriggerDistance) {
-                        "已开启：无候选且近障碍略远时缓升，成功规划后向滑条基线缓降；节流写回配置"
-                    } else {
-                        "已关闭：仅使用下方固定倍数"
-                    },
-                    checked = config.automation.autoAdjustTriggerDistance,
-                    onCheckedChange = { value ->
-                        update {
-                            it.copy(automation = it.automation.copy(autoAdjustTriggerDistance = value))
-                        }
-                    },
-                )
-                LabeledSlider(
-                    "甜品工厂",
-                    config.automation.sweetTriggerDistancePlayerWidths,
-                    0.5f..8f,
-                ) { value ->
-                    update {
-                        it.copy(automation = it.automation.copy(sweetTriggerDistancePlayerWidths = value))
-                    }
-                }
-                LabeledSlider(
-                    "竹影书屋",
-                    config.automation.bambooTriggerDistancePlayerWidths,
-                    0.5f..8f,
-                ) { value ->
-                    update {
-                        it.copy(automation = it.automation.copy(bambooTriggerDistancePlayerWidths = value))
-                    }
-                }
-                LabeledSlider(
-                    "海盐客厅",
-                    config.automation.seaSaltTriggerDistancePlayerWidths,
-                    0.5f..8f,
-                ) { value ->
-                    update {
-                        it.copy(automation = it.automation.copy(seaSaltTriggerDistancePlayerWidths = value))
-                    }
-                }
-            }
-        }
-        item {
-            SettingsSectionCard(
-                title = "节流与场景门控",
-                description = "限制动作频率与最低场景置信度，降低误触。",
+                title = "节流门控",
+                description = "限制动作频率，降低误触。",
             ) {
                 LabeledSlider(
                     "每秒最多动作数",
@@ -334,15 +285,6 @@ fun AutomationSettingsScreen(
                 ) { value ->
                     update {
                         it.copy(automation = it.automation.copy(maxActionsPerSecond = value.toInt()))
-                    }
-                }
-                LabeledSlider(
-                    "最低场景置信度",
-                    config.automation.minimumSceneConfidence,
-                    0.5f..1f,
-                ) { value ->
-                    update {
-                        it.copy(automation = it.automation.copy(minimumSceneConfidence = value))
                     }
                 }
                 LabeledSlider(

@@ -66,20 +66,20 @@ object McpToolCatalog {
     val tools: List<McpToolDescriptor> = listOf(
         McpToolDescriptor(
             name = "get_status",
-            description = "读取视觉运行时状态（是否运行、后端、FPS、障碍数等）",
+            description = "读取截图运行时状态（是否运行、后端、FPS、截图就绪等）",
             risk = McpToolRisk.READ,
             inputSchema = emptyObjectSchema(),
         ),
         McpToolDescriptor(
             name = "inspect",
-            description = "一键诊断聚合：status + latest + algorithm + automationGates + permissions + mcp + version；" +
+            description = "一键诊断聚合：status + cleanBase + automationGates + permissions + mcp + version；" +
                 "include 可选子集（逗号分隔）裁剪输出，减少传输",
             risk = McpToolRisk.READ,
             inputSchema = objSchema(
                 properties = JSONObject().put(
                     "include",
                     stringProp(
-                        "逗号分隔子集：status,latest,algorithm,gates,permissions,mcp,version；" +
+                        "逗号分隔子集：status,cleanbase,gates,permissions,mcp,version；" +
                             "默认全部",
                     ),
                 ),
@@ -87,7 +87,7 @@ object McpToolCatalog {
         ),
         McpToolDescriptor(
             name = "get_runtime_snapshot",
-            description = "读取视觉运行时聚合快照（状态、最近结果、算法与自动操作门控）",
+            description = "读取截图运行时聚合快照（状态、自动操作门控）",
             risk = McpToolRisk.READ,
             inputSchema = emptyObjectSchema(),
         ),
@@ -125,7 +125,7 @@ object McpToolCatalog {
         ),
         McpToolDescriptor(
             name = "patch_settings",
-            description = "白名单局部改设置（主题/悬浮窗/场景阈值/算法通道等）；比整包 JSON 更安全。" +
+            description = "白名单局部改设置（主题/悬浮窗/截图与手势后端等）；比整包 JSON 更安全。" +
                 "支持 patches（点分路径→值）与 operations（[{path,value,op}]，op: set/add/remove/toggle）",
             risk = McpToolRisk.WRITE,
             inputSchema = objSchema(
@@ -320,77 +320,6 @@ object McpToolCatalog {
             inputSchema = emptyObjectSchema(),
         ),
         McpToolDescriptor(
-            name = "set_scene",
-            description = "切换当前分析赛季",
-            risk = McpToolRisk.WRITE,
-            inputSchema = objSchema(
-                properties = JSONObject()
-                    .put(
-                        "scene",
-                        stringProp(
-                            "赛季枚举",
-                            listOf("SWEET_FACTORY", "BAMBOO_BOOKSTORE", "SEA_SALT_LIVING_ROOM"),
-                        ),
-                    )
-                    .put("persist", boolProp("是否永久保存（默认 true）")),
-                required = listOf("scene"),
-            ),
-            required = listOf("scene"),
-        ),
-        McpToolDescriptor(
-            name = "set_obstacle_enabled",
-            description = "启用或禁用某赛季的障碍类别",
-            risk = McpToolRisk.WRITE,
-            inputSchema = objSchema(
-                properties = JSONObject()
-                    .put(
-                        "scene",
-                        stringProp(
-                            "赛季；省略则当前",
-                            listOf("SWEET_FACTORY", "BAMBOO_BOOKSTORE", "SEA_SALT_LIVING_ROOM"),
-                        ),
-                    )
-                    .put("kind", stringProp("障碍枚举名，如 SEA_PIT"))
-                    .put("enabled", boolProp("true=启用"))
-                    .put("persist", boolProp("是否永久保存（默认 true）")),
-                required = listOf("kind", "enabled"),
-            ),
-            required = listOf("kind", "enabled"),
-        ),
-        McpToolDescriptor(
-            name = "set_threshold",
-            description = "设置某赛季用户可调阈值",
-            risk = McpToolRisk.WRITE,
-            inputSchema = objSchema(
-                properties = JSONObject()
-                    .put(
-                        "scene",
-                        stringProp(
-                            "赛季；省略则当前",
-                            listOf("SWEET_FACTORY", "BAMBOO_BOOKSTORE", "SEA_SALT_LIVING_ROOM"),
-                        ),
-                    )
-                    .put(
-                        "key",
-                        stringProp(
-                            "阈值字段",
-                            listOf(
-                                "workWidth",
-                                "minimumConfidence",
-                                "stableFrames",
-                                "playerReferenceMode",
-                                "fixedPlayerXRatio",
-                                "behindPlayerMarginRatio",
-                            ),
-                        ),
-                    )
-                    .put("value", JSONObject().put("description", "数值或枚举字符串"))
-                    .put("persist", boolProp("是否永久保存（默认 true）")),
-                required = listOf("key", "value"),
-            ),
-            required = listOf("key", "value"),
-        ),
-        McpToolDescriptor(
             name = "set_theme",
             description = "调整主题 mode/preset/dynamicColor/reduceMotion 等",
             risk = McpToolRisk.WRITE,
@@ -486,53 +415,6 @@ object McpToolCatalog {
             required = listOf("enabled"),
         ),
         McpToolDescriptor(
-            name = "list_algorithms",
-            description = "列出内置/捆绑/已装/远端目录算法摘要",
-            risk = McpToolRisk.READ,
-            inputSchema = emptyObjectSchema(),
-        ),
-        McpToolDescriptor(
-            name = "get_active_algorithm",
-            description = "当前激活算法 ID/版本/generation",
-            risk = McpToolRisk.READ,
-            inputSchema = emptyObjectSchema(),
-        ),
-        McpToolDescriptor(
-            name = "get_algorithm_pipeline",
-            description = "算法激活管线阶段与最近一帧摘要",
-            risk = McpToolRisk.READ,
-            inputSchema = emptyObjectSchema(),
-        ),
-        McpToolDescriptor(
-            name = "set_active_algorithm",
-            description = "钉选算法并切换选择模式",
-            risk = McpToolRisk.WRITE,
-            inputSchema = objSchema(
-                properties = JSONObject()
-                    .put("algorithmId", stringProp("算法包 ID"))
-                    .put("mode", stringProp("MANUAL/AUTO", listOf("MANUAL", "AUTO")))
-                    .put("persist", boolProp("是否永久保存（默认 true）")),
-                required = listOf("algorithmId"),
-            ),
-            required = listOf("algorithmId"),
-        ),
-        McpToolDescriptor(
-            name = "refresh_algorithm_catalog",
-            description = "刷新远端算法目录",
-            risk = McpToolRisk.WRITE,
-            inputSchema = emptyObjectSchema(),
-        ),
-        McpToolDescriptor(
-            name = "download_algorithm",
-            description = "下载并验签安装远端算法包（HIGH_RISK）",
-            risk = McpToolRisk.HIGH_RISK,
-            inputSchema = objSchema(
-                properties = JSONObject().put("algorithmId", stringProp("远端算法 ID")),
-                required = listOf("algorithmId"),
-            ),
-            required = listOf("algorithmId"),
-        ),
-        McpToolDescriptor(
             name = "get_logs",
             description = "读取内存日志 ring（需开发者选项）",
             risk = McpToolRisk.READ,
@@ -592,17 +474,6 @@ object McpToolCatalog {
                 properties = JSONObject()
                     .put("since", intProp("只返回 seq > since 的事件，默认 0（全部）；溢出返回 dropped 标志"))
                     .put("limit", intProp("条数，默认 50，最大 200")),
-            ),
-        ),
-        McpToolDescriptor(
-            name = "upgrade_algorithms",
-            description = "一键升级所有已装的外部算法包（builtin / bundled 跳过，同 version 跳过）。可选 dryRun 仅返回可升级列表",
-            risk = McpToolRisk.HIGH_RISK,
-            inputSchema = objSchema(
-                properties = JSONObject().put(
-                    "dryRun",
-                    boolProp("true=不执行下载，仅返回可升级/跳过/失败列表（默认 false）"),
-                ),
             ),
         ),
         // —— 命名配置 Profile ——
@@ -741,20 +612,16 @@ object McpToolCatalog {
 
     val resources: List<McpResourceDescriptor> = listOf(
         McpResourceDescriptor("app://status", "status", "当前运行状态"),
-        McpResourceDescriptor("app://runtime/snapshot", "runtime/snapshot", "运行态+检测+算法+门闩聚合"),
+        McpResourceDescriptor("app://runtime/snapshot", "runtime/snapshot", "运行态 + Clean Base 标记 + 门闩聚合"),
         McpResourceDescriptor("app://settings/schema", "settings/schema", "设置 schema 摘要"),
         McpResourceDescriptor("app://settings/current", "settings/current", "当前完整设置"),
-        McpResourceDescriptor("app://vision/latest", "vision/latest", "最近一帧视觉结果"),
-        McpResourceDescriptor("app://vision/metrics", "vision/metrics", "运行指标"),
+        McpResourceDescriptor("app://runtime/metrics", "runtime/metrics", "运行指标"),
         McpResourceDescriptor("app://debug/frames", "debug/frames", "调试帧元数据"),
-        McpResourceDescriptor("app://algorithm/active", "algorithm/active", "当前激活算法"),
-        McpResourceDescriptor("app://algorithm/catalog", "algorithm/catalog", "算法目录摘要"),
-        McpResourceDescriptor("app://algorithm/pipeline", "algorithm/pipeline", "算法管线阶段"),
         McpResourceDescriptor("app://automation/gates", "automation/gates", "自动操作门闩"),
         McpResourceDescriptor("app://permissions", "permissions", "系统权限状态"),
         McpResourceDescriptor("app://logs/recent", "logs/recent", "最近日志（需开发者）"),
         McpResourceDescriptor("app://mcp/status", "mcp/status", "MCP 服务与工具策略状态"),
-        McpResourceDescriptor("app://events", "events", "运行时事件流（启停/算法/配置/错误）"),
+        McpResourceDescriptor("app://events", "events", "运行时事件流（启停/配置/错误）"),
     )
 
     private val byName = tools.associateBy { it.name }

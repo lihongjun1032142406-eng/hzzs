@@ -5,14 +5,10 @@ package top.azek431.hzzs.core.model
  *
  * 界面与悬浮窗应使用本文件扩展函数，避免直接展示枚举名或英文标识。
  * 仅负责展示字符串，不含业务逻辑。
+ *
+ * Clean Base：已移除赛季 / 算法 / 玩家基准 / 障碍类别 / 规避动作等
+ * HZZS 原游戏视觉算法相关文案映射。
  */
-
-/** 赛季显示名。 */
-fun SceneId.displayName(): String = when (this) {
-    SceneId.SWEET_FACTORY -> "甜品工厂"
-    SceneId.BAMBOO_BOOKSTORE -> "竹影书屋"
-    SceneId.SEA_SALT_LIVING_ROOM -> "海盐客厅"
-}
 
 /** 截图后端显示名。 */
 fun CaptureBackend.displayName(): String = when (this) {
@@ -65,18 +61,6 @@ fun McpToolPolicy.displayName(): String = when (this) {
     McpToolPolicy.DISABLED -> "禁用"
 }
 
-/** 算法选择模式显示名。 */
-fun AlgorithmSelectionMode.displayName(): String = when (this) {
-    AlgorithmSelectionMode.AUTO -> "自动选择"
-    AlgorithmSelectionMode.MANUAL -> "手动选择"
-}
-
-/** 算法发布通道显示名。 */
-fun AlgorithmChannel.displayName(): String = when (this) {
-    AlgorithmChannel.STABLE -> "稳定"
-    AlgorithmChannel.BETA -> "测试"
-}
-
 /** 更新源偏好显示名。 */
 fun UpdateSourcePreference.displayName(): String = when (this) {
     UpdateSourcePreference.AUTO -> "自动选择"
@@ -96,16 +80,6 @@ fun AppThemeMode.displayName(): String = when (this) {
     AppThemeMode.LIGHT -> "浅色"
     AppThemeMode.DARK -> "深色"
     AppThemeMode.AMOLED -> "纯黑"
-}
-
-/** 规避动作显示名（用于 HUD / 调试）。 */
-fun top.azek431.hzzs.domain.vision.Avoidance.displayName(): String = when (this) {
-    top.azek431.hzzs.domain.vision.Avoidance.NONE -> "无"
-    top.azek431.hzzs.domain.vision.Avoidance.JUMP -> "跳跃"
-    top.azek431.hzzs.domain.vision.Avoidance.DOUBLE_JUMP -> "双跳"
-    top.azek431.hzzs.domain.vision.Avoidance.SLIDE -> "下滑"
-    top.azek431.hzzs.domain.vision.Avoidance.PRESS -> "按键"
-    top.azek431.hzzs.domain.vision.Avoidance.SWIPE_UP -> "上滑"
 }
 
 /** 内置调色板显示名。 */
@@ -141,46 +115,4 @@ fun OverlayTheme.displayName(): String = when (this) {
     OverlayTheme.NEON_GREEN -> "霓虹绿"
     OverlayTheme.WARNING_ORANGE -> "警示橙"
     OverlayTheme.CUSTOM -> "自定义"
-}
-
-/** 玩家基准策略显示名。 */
-fun PlayerReferenceMode.displayName(): String = when (this) {
-    PlayerReferenceMode.FIXED_RATIO -> "固定比例"
-    PlayerReferenceMode.DETECT_ONCE -> "启动检测一次"
-    PlayerReferenceMode.CONTINUOUS -> "持续检测"
-}
-
-/** 障碍类别显示名（设置过滤、列表等）。 */
-fun ObstacleKind.displayName(): String = when (this) {
-    ObstacleKind.GREEN_BOTTLE -> "绿色毒瓶"
-    ObstacleKind.CAKE_STRUCTURE -> "蛋糕结构"
-    ObstacleKind.HANGING_SPIKE -> "悬挂尖刺"
-    ObstacleKind.PIT -> "地坑"
-    ObstacleKind.PANDA_STATUE -> "熊猫摆件"
-    ObstacleKind.BAMBOO_GAP -> "竹林缺口"
-    ObstacleKind.HANGING_BRUSH -> "悬挂毛笔"
-    ObstacleKind.SAND_CASTLE -> "沙堡"
-    ObstacleKind.HANGING_ANCHOR -> "悬挂船锚"
-    ObstacleKind.SEA_PIT -> "海坑"
-}
-
-/**
- * 将检测类别字符串映射为中文。
- *
- * 用于悬浮窗 / 调试 HUD 等只持有字符串的场景；
- * 未知值原样返回，避免崩溃。
- */
-fun detectionKindDisplayName(kindName: String): String = when (kindName) {
-    "PLAYER" -> "玩家"
-    "GREEN_BOTTLE", "POISON_BOTTLE" -> "绿色毒瓶"
-    "CAKE_STRUCTURE" -> "蛋糕结构"
-    "HANGING_SPIKE" -> "悬挂尖刺"
-    "PIT" -> "地坑"
-    "PANDA_STATUE" -> "熊猫摆件"
-    "BAMBOO_GAP" -> "竹林缺口"
-    "HANGING_BRUSH" -> "悬挂毛笔"
-    "SAND_CASTLE" -> "沙堡"
-    "HANGING_ANCHOR" -> "悬挂船锚"
-    "SEA_PIT" -> "海坑"
-    else -> kindName
 }

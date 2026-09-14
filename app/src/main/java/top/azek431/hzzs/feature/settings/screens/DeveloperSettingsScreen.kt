@@ -1,7 +1,7 @@
 /**
  * 开发者设置页。
  *
- * 职责：调试帧管理、日志级别、强制截图后端、Native Benchmark、坐标网格、系统指针位置等高级调试项。
+ * 职责：调试帧管理、日志级别、强制截图后端、坐标网格、系统指针位置等高级调试项。
  * 安全：关于页连点版本号 7 次开启 [DeveloperConfig.enabled]；本页开关可关闭，关闭后设置首页隐藏入口。
  * 边界：不启动 MCP 服务本体；诊断导出不含 Bearer；系统指针位置经 [SystemCapabilityAccess]
  *（可点授权 Shizuku → 绝对路径 settings 首成功即停 → WRITE_SETTINGS → Root），不静默要权。
@@ -48,7 +48,6 @@ import top.azek431.hzzs.core.model.AppLogLevel
 import top.azek431.hzzs.core.model.CaptureBackend
 import top.azek431.hzzs.core.model.developerLabel
 import top.azek431.hzzs.core.model.displayName
-import top.azek431.hzzs.data.vision.NativeBenchmarkResult
 import top.azek431.hzzs.feature.settings.components.SettingsNavigationRow
 import top.azek431.hzzs.feature.settings.components.SettingsRadioCard
 import top.azek431.hzzs.feature.settings.components.SettingsSectionCard
@@ -73,13 +72,10 @@ fun DeveloperSettingsScreen(
     config: top.azek431.hzzs.core.model.AppConfig,
     update: ((top.azek431.hzzs.core.model.AppConfig) -> top.azek431.hzzs.core.model.AppConfig) -> Unit,
     debugFrameCount: Int,
-    benchmark: Result<NativeBenchmarkResult>?,
     onRefreshDebugFrames: () -> Unit = {},
     onClearDebugFrames: () -> Unit = {},
-    onRunBenchmark: () -> Unit = {},
     onBuildDiagnostics: () -> String = { "" },
     onOpenLogViewer: () -> Unit = {},
-    onOpenAlgorithmPipeline: () -> Unit = {},
     onMessage: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -349,11 +345,6 @@ fun DeveloperSettingsScreen(
                         subtitle = stringResource(R.string.dev_open_log_viewer_subtitle),
                         onClick = onOpenLogViewer,
                     )
-                    SettingsNavigationRow(
-                        title = stringResource(R.string.dev_open_algorithm_pipeline),
-                        subtitle = stringResource(R.string.dev_open_algorithm_pipeline_subtitle),
-                        onClick = onOpenAlgorithmPipeline,
-                    )
                 }
             }
 
@@ -450,49 +441,6 @@ fun DeveloperSettingsScreen(
                 }
             }
 
-            // ── 5b. 算法诊断（开销默认关闭，逐项标注影响） ──
-            item {
-                SettingsSectionCard(
-                    title = stringResource(R.string.dev_algorithm_diagnostics_title),
-                    description = stringResource(R.string.dev_algorithm_diagnostics_desc),
-                ) {
-                    SettingsWarningCard(
-                        title = stringResource(R.string.dev_algorithm_diagnostics_warning_title),
-                        body = stringResource(R.string.dev_algorithm_diagnostics_warning),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.dev_enable_stage_timing),
-                        subtitle = stringResource(R.string.dev_enable_stage_timing_subtitle),
-                        checked = config.developer.enableStageTiming,
-                        onCheckedChange = { value ->
-                            update {
-                                it.copy(developer = it.developer.copy(enableStageTiming = value))
-                            }
-                        },
-                    )
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.dev_enable_multicolor_diagnostic),
-                        subtitle = stringResource(R.string.dev_enable_multicolor_diagnostic_subtitle),
-                        checked = config.developer.enableMulticolorDiagnostic,
-                        onCheckedChange = { value ->
-                            update {
-                                it.copy(developer = it.developer.copy(enableMulticolorDiagnostic = value))
-                            }
-                        },
-                    )
-                    SettingsSwitchRow(
-                        title = stringResource(R.string.dev_enable_filter_trace),
-                        subtitle = stringResource(R.string.dev_enable_filter_trace_subtitle),
-                        checked = config.developer.enableFilterTrace,
-                        onCheckedChange = { value ->
-                            update {
-                                it.copy(developer = it.developer.copy(enableFilterTrace = value))
-                            }
-                        },
-                    )
-                }
-            }
 
             // ── 6. 识别帧率上限 ──
             item {
@@ -518,58 +466,6 @@ fun DeveloperSettingsScreen(
                 }
             }
 
-            // ── 7. Native 自检 ──
-            item {
-                SettingsSectionCard(
-                    title = stringResource(R.string.dev_native_benchmark_title),
-                    description = stringResource(R.string.dev_native_benchmark_desc),
-                ) {
-                    Text(
-                        stringResource(R.string.dev_native_benchmark_iterations, config.developer.nativeBenchmarkIterations),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Slider(
-                        value = config.developer.nativeBenchmarkIterations.toFloat(),
-                        onValueChange = { value ->
-                            update {
-                                it.copy(
-                                    developer = it.developer.copy(
-                                        nativeBenchmarkIterations = value.toInt(),
-                                    ),
-                                )
-                            }
-                        },
-                        valueRange = 10f..1000f,
-                    )
-                    Button(onClick = onRunBenchmark, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.dev_run_benchmark))
-                    }
-                    benchmark?.fold(
-                        onSuccess = { result ->
-                            Text(
-                                stringResource(
-                                    R.string.dev_benchmark_success,
-                                    result.iterations,
-                                    result.meanMs,
-                                    result.p50Ms,
-                                    result.p95Ms,
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        },
-                        onFailure = { error ->
-                            Text(
-                                stringResource(
-                                    R.string.dev_benchmark_failed,
-                                    error.message ?: error.javaClass.simpleName,
-                                ),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        },
-                    )
-                }
-            }
 
             // ── 8. 诊断导出 ──
             item {

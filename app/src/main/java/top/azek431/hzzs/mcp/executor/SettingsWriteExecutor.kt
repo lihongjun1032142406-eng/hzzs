@@ -4,8 +4,6 @@ import org.json.JSONObject
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.CaptureBackend
 import top.azek431.hzzs.core.model.GestureBackend
-import top.azek431.hzzs.core.model.ObstacleKind
-import top.azek431.hzzs.core.model.SceneId
 import top.azek431.hzzs.core.preferences.SettingsRepository
 import top.azek431.hzzs.core.preferences.hardenedForExternalIngest
 import top.azek431.hzzs.data.vision.VisionRuntimeController
@@ -17,7 +15,10 @@ import top.azek431.hzzs.mcp.requireString
 import javax.inject.Inject
 
 /**
- * 设置写入执行器：主题 / 悬浮窗 / 场景 / 阈值 / 障碍 / 截图与手势后端 / 开发者 / 自动操作。
+ * 设置写入执行器：主题 / 悬浮窗 / 截图与手势后端 / 开发者 / 自动操作。
+ *
+ * Clean Base：赛季 / 识别阈值 / 障碍类别等 HZZS 原游戏视觉算法配置已清退，
+ * 且自动操作在 [AppConfig.ACTION_ENABLED] = false 下 fail-closed（无法真正派发动作）。
  *
  * 写操作统一经 [SettingsRepository]（preview 或 save）；[set_gesture_backend] 会同步取消在飞手势
  * （手势后端仅随已保存配置生效，草稿不派发）。
@@ -31,9 +32,6 @@ class SettingsWriteExecutor @Inject constructor(
         "save_settings",
         "patch_settings",
         "reset_preview",
-        "set_scene",
-        "set_obstacle_enabled",
-        "set_threshold",
         "set_theme",
         "set_overlay",
         "set_overlay_visible",
@@ -59,9 +57,6 @@ class SettingsWriteExecutor @Inject constructor(
             settings.clearPreview()
             ok("临时预览已恢复")
         }
-        "set_scene" -> executeSetScene(arguments)
-        "set_obstacle_enabled" -> executeSetObstacleEnabled(arguments)
-        "set_threshold" -> executeSetThreshold(arguments)
         "set_theme" -> executeSetTheme(arguments)
         "set_overlay" -> executeSetOverlay(arguments)
         "set_overlay_visible" -> {
@@ -121,44 +116,6 @@ class SettingsWriteExecutor @Inject constructor(
             )
         }
         return ok(if (persist) "局部设置已保存" else "局部设置已预览")
-    }
-
-    private suspend fun executeSetScene(arguments: JSONObject): JSONObject {
-        val scene = enumValueOf<SceneId>(arguments.requireString("scene"))
-        val persist = arguments.optBoolean("persist", true)
-        applyConfig({ it.copy(selectedScene = scene) }, persist)
-        return ok("赛季已切换为 ${scene.name}")
-    }
-
-    private suspend fun executeSetObstacleEnabled(arguments: JSONObject): JSONObject {
-        val cfg = settings.current()
-        val scene = arguments.optString("scene").takeIf { it.isNotBlank() }?.let {
-            enumValueOf<SceneId>(it)
-        } ?: cfg.selectedScene
-        val kind = enumValueOf<ObstacleKind>(arguments.requireString("kind"))
-        val enabled = arguments.getBoolean("enabled")
-        val persist = arguments.optBoolean("persist", true)
-        val sceneCfg = cfg.scenes[scene] ?: error("未知场景")
-        val disabled = sceneCfg.disabledObstacles.toMutableSet()
-        if (enabled) disabled.remove(kind) else disabled.add(kind)
-        applyConfig(
-            { it.copy(scenes = it.scenes + (scene to sceneCfg.copy(disabledObstacles = disabled))) },
-            persist,
-        )
-        return ok("${kind.name} 已${if (enabled) "启用" else "禁用"} @ ${scene.name}")
-    }
-
-    private suspend fun executeSetThreshold(arguments: JSONObject): JSONObject {
-        val cfg = settings.current()
-        val scene = arguments.optString("scene").takeIf { it.isNotBlank() }?.let {
-            enumValueOf<SceneId>(it)
-        } ?: cfg.selectedScene
-        val key = arguments.requireString("key")
-        val persist = arguments.optBoolean("persist", true)
-        val path = "scenes.${scene.name}.thresholds.$key"
-        val patched = McpSettingsPatch.apply(cfg, mapOf(path to arguments.get("value")))
-        if (persist) settings.save(patched) else settings.preview(patched)
-        return ok("已更新 $path")
     }
 
     private suspend fun executeSetTheme(arguments: JSONObject): JSONObject {
@@ -271,18 +228,6 @@ class SettingsWriteExecutor @Inject constructor(
         if (arguments.has("logRingCapacity")) {
             patches.put("developer.logRingCapacity", arguments.getInt("logRingCapacity"))
         }
-        if (arguments.has("enableStageTiming")) {
-            patches.put("developer.enableStageTiming", arguments.getBoolean("enableStageTiming"))
-        }
-        if (arguments.has("enableMulticolorDiagnostic")) {
-            patches.put(
-                "developer.enableMulticolorDiagnostic",
-                arguments.getBoolean("enableMulticolorDiagnostic"),
-            )
-        }
-        if (arguments.has("enableFilterTrace")) {
-            patches.put("developer.enableFilterTrace", arguments.getBoolean("enableFilterTrace"))
-        }
         if (arguments.has("forceCaptureBackend")) {
             val raw = arguments.optString("forceCaptureBackend")
             patches.put(
@@ -309,6 +254,14 @@ class SettingsWriteExecutor @Inject constructor(
         val enabled = arguments.getBoolean("enabled")
         val accept = arguments.optBoolean("acceptDisclaimer", false)
         val base = settings.current()
+        // Clean Base fail-closed：真实动作总闸恒关，不得通过设置/MCP 打开。
+        if (enabled && !AppConfig.ACTION_ENABLED) {
+            check(accept) {
+                "Clean Base 阶段 ACTION_ENABLED=false：接受免责声明也须再经 Commander 授权"
+            }
+            settings.save(base.copy(automation = base.automation.copy(enabled = false)))
+            return ok("Clean Base：自动操作总开关保持关闭（ACTION_ENABLED=false）")
+        }
         var auto = base.automation.copy(enabled = enabled)
         if (enabled && auto.disclaimerAcceptedVersion < AppConfig.DISCLAIMER_VERSION) {
             check(accept) {

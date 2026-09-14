@@ -63,9 +63,9 @@ class AppLogTest {
     fun queryFiltersByTagAndTextAndSupportsNewestFirst() {
         AppLog.configure(enabled = true, level = AppLogLevel.VERBOSE)
         AppLog.i("vision", "frame ok")
-        AppLog.e("algorithm", "activate failed for pack.demo")
+        AppLog.e("vision", "capture failed for demo")
         AppLog.w("vision", "capture slow")
-        val onlyAlgo = AppLog.query(tagEquals = "algorithm")
+        val onlyAlgo = AppLog.query(tagEquals = "vision")
         assertEquals(1, onlyAlgo.size)
         assertTrue(onlyAlgo.single().message.contains("activate failed"))
         val search = AppLog.query(query = "capture")
@@ -78,7 +78,7 @@ class AppLogTest {
         )
         assertEquals(AppLog.size().toLong().coerceAtLeast(1L) > 0, AppLog.revision() > 0)
         assertTrue(AppLog.knownTags().contains("vision"))
-        assertTrue(AppLog.formatText(tagEquals = "algorithm").contains("activate failed"))
+        assertTrue(AppLog.formatText(tagEquals = "vision").contains("capture failed"))
     }
 
     @Test
@@ -132,16 +132,6 @@ class DiagnosticsExporterTest {
             config = AppConfig(developer = DeveloperConfig(enabled = true, logLevel = AppLogLevel.DEBUG)),
             mcp = McpDiagnosticsSnapshot(running = true, port = 8765, lastError = null),
             debugFrameCount = 3,
-            algorithm = AlgorithmDiagnosticsSnapshot(
-                algorithmId = "builtin.hzzs.base",
-                version = "0.1.0",
-                generation = 3L,
-                usingBuiltinFallback = true,
-                loadError = null,
-                nativeAvailable = false,
-                pendingCatalogId = null,
-                analysisRunning = false,
-            ),
             runtime = RuntimeStatus(
                 running = true,
                 overlayVisible = false,
@@ -156,7 +146,6 @@ class DiagnosticsExporterTest {
         assertTrue(report.contains("id=builtin.hzzs.base"))
         assertTrue(report.contains("version=0.1.0"))
         assertTrue(report.contains("generation=3"))
-        assertTrue(report.contains("== Algorithm activation =="))
         assertTrue(report.contains("vision.overlayBlockReason=PERMISSION"))
         assertTrue(report.contains("capture.requested="))
         assertTrue(report.contains("capture.effective="))
@@ -167,9 +156,6 @@ class DiagnosticsExporterTest {
         assertTrue(report.contains("shizuku.ready="))
         assertTrue(report.contains("foreground.pkg="))
         assertTrue(report.contains("automation.disclaimerAcceptedVersion="))
-        assertTrue(report.contains("automation.triggerPlayerWidths="))
-        assertTrue(report.contains("automation.autoAdjustTriggerDistance="))
-        assertTrue(report.contains("Boxes on screen"))
         // 本地时区 + 偏移；不得再出现假 UTC 的 `...Z` 样式（无偏移）。
         assertTrue(report.contains("generatedAt="))
         assertTrue(
@@ -178,9 +164,6 @@ class DiagnosticsExporterTest {
                 .containsMatchIn(report),
         )
         assertTrue(report.contains("Timestamps use the device local timezone with offset"))
-        assertTrue(report.contains("== Algorithm pipeline =="))
-        assertTrue(report.contains("== Algorithm runtime frames"))
-        assertTrue(report.contains("algo.frame"))
         assertFalse(report.contains("should-not-appear"))
         assertFalse(report.contains("Bearer should"))
         assertTrue(report.contains("Bearer <redacted>") || report.contains("<redacted>"))

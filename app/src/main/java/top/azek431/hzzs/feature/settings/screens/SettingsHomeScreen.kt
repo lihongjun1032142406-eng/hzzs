@@ -2,7 +2,7 @@
  * 设置分类首页。
  *
  * 职责：搜索 + 分组列出入口与当前摘要；点击打开子页。
- * 数据流：只读 [config]/[algorithmState]；不直接改配置。
+ * 数据流：只读 [config]；不直接改配置。
  * 边界：返回本页不丢配置（草稿预览由 ViewModel 负责）。
  */
 package top.azek431.hzzs.feature.settings.screens
@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import top.azek431.hzzs.R
-import top.azek431.hzzs.core.algorithm.AlgorithmCatalogState
 import top.azek431.hzzs.core.designsystem.HzzsCallout
 import top.azek431.hzzs.core.designsystem.HzzsCalloutTone
 import top.azek431.hzzs.core.designsystem.LocalHzzsDimensions
@@ -45,7 +44,6 @@ import top.azek431.hzzs.feature.settings.model.summary
 @Composable
 fun SettingsHomeScreen(
     config: AppConfig,
-    algorithmState: AlgorithmCatalogState,
     onOpen: (SettingsCategory) -> Unit,
     modifier: Modifier = Modifier,
     selectedRoute: String? = null,
@@ -122,7 +120,7 @@ fun SettingsHomeScreen(
                     SettingsCategoryCard(
                         title = titleMap.getValue(category),
                         description = descMap.getValue(category),
-                        summary = category.summary(config, algorithmState),
+                        summary = category.summary(config),
                         icon = category.icon,
                         onClick = { onOpen(category) },
                         selected = selectedRoute == category.route,

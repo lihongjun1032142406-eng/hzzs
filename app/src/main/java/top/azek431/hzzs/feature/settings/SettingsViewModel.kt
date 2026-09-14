@@ -4,9 +4,9 @@
  * 职责：订阅/维护当前草稿 [AppConfig]；普通改动经 [update] 写入内存预览（不落盘）；
  * [save] 才 [SettingsRepository.save] 永久保存；[discard] 丢弃预览并恢复已保存快照。
  * 危险项（如开自动操作）由子页对话框确认后再调用 [update]。
- * 网络刷新与算法下载为即时任务，与配置字段无关。
- * 边界：不直接 JNI/Root/WindowManager；算法经 [AlgorithmCatalogController] /
- * [AlgorithmActivationCoordinator]，更新经 [UpdateRepository]。
+ * 应用更新检查/下载/安装为即时任务，与配置字段无关。
+ * 边界：不直接 JNI/Root/WindowManager；更新经 [UpdateRepository]。
+ * Clean Base：不持有任何算法目录/激活/原生视觉依赖。
  */
 package top.azek431.hzzs.feature.settings
 
@@ -27,10 +27,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import top.azek431.hzzs.core.algorithm.AlgorithmActivationCoordinator
-import top.azek431.hzzs.core.algorithm.AlgorithmCatalogController
-import top.azek431.hzzs.core.algorithm.AlgorithmCatalogState
-import top.azek431.hzzs.core.logging.AlgorithmDiagnosticsSnapshot
 import top.azek431.hzzs.core.logging.AppLog
 import top.azek431.hzzs.core.logging.DiagnosticsExporter
 import top.azek431.hzzs.core.logging.McpDiagnosticsSnapshot
@@ -46,13 +42,9 @@ import top.azek431.hzzs.core.update.SourceResult
 import top.azek431.hzzs.core.update.UpdateFileVerifier
 import top.azek431.hzzs.core.update.UpdateRepository
 import top.azek431.hzzs.data.vision.DebugFrameRecorder
-import top.azek431.hzzs.data.vision.NativeBenchmarkResult
-import top.azek431.hzzs.data.vision.NativeBenchmarkRunner
 import top.azek431.hzzs.data.vision.VisionRuntimeController
-import top.azek431.hzzs.domain.vision.VisionEngine
 import top.azek431.hzzs.mcp.McpServerState
 import top.azek431.hzzs.mcp.McpUiBridge
-import top.azek431.hzzs.nativevision.NativeVision
 import top.azek431.hzzs.platform.compat.CaptureCapabilityResolver
 import top.azek431.hzzs.platform.compat.GestureCapabilityResolver
 import java.io.File
@@ -80,12 +72,8 @@ class SettingsViewModel @Inject constructor(
     private val capabilityResolver: CaptureCapabilityResolver,
     private val gestureCapabilityResolver: GestureCapabilityResolver,
     private val updateRepository: UpdateRepository,
-    private val algorithmCatalog: AlgorithmCatalogController,
-    private val algorithmActivation: AlgorithmActivationCoordinator,
-    private val visionEngine: VisionEngine,
     private val visionRuntime: VisionRuntimeController,
     private val debugFrames: DebugFrameRecorder,
-    private val benchmarkRunner: NativeBenchmarkRunner,
     mcpUiBridge: McpUiBridge,
 ) : ViewModel() {
     private val mutableConfig = MutableStateFlow(AppConfig())
@@ -104,12 +92,9 @@ class SettingsViewModel @Inject constructor(
     val gestureCapabilities = gestureCapabilityResolver.all()
     private val mutableUpdate = MutableStateFlow(UpdateUiState())
     val updateState: StateFlow<UpdateUiState> = mutableUpdate.asStateFlow()
-    val algorithmState: StateFlow<AlgorithmCatalogState> = algorithmCatalog.state
     val mcpState: StateFlow<McpServerState> = mcpUiBridge.serverState
     private val mutableDebugFrameCount = MutableStateFlow(0)
     val debugFrameCount: StateFlow<Int> = mutableDebugFrameCount.asStateFlow()
-    private val mutableBenchmark = MutableStateFlow<Result<NativeBenchmarkResult>?>(null)
-    val benchmark: StateFlow<Result<NativeBenchmarkResult>?> = mutableBenchmark.asStateFlow()
 
     /** 最近一次已保存快照（不含预览）。 */
     private var baseline: AppConfig = AppConfig()
@@ -122,8 +107,6 @@ class SettingsViewModel @Inject constructor(
             baseline = snap
             mutableConfig.value = snap
             mutableDirty.value = false
-            bindAlgorithm(snap)
-            algorithmCatalog.refreshCatalog()
             refreshDebugFrameCount()
         }
         viewModelScope.launch {
@@ -133,7 +116,6 @@ class SettingsViewModel @Inject constructor(
                 if (remote != mutableConfig.value) {
                     baseline = remote
                     mutableConfig.value = remote
-                    bindAlgorithm(remote)
                 }
             }
         }
@@ -150,11 +132,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun runNativeBenchmark() {
-        val iterations = mutableConfig.value.developer.nativeBenchmarkIterations
-        viewModelScope.launch { mutableBenchmark.value = benchmarkRunner.run(iterations) }
-    }
-
     /** 基于当前配置与运行态生成脱敏诊断文本（不含 Bearer）。 */
     fun buildDiagnosticsReport(): String {
         val config = mutableConfig.value
@@ -169,7 +146,6 @@ class SettingsViewModel @Inject constructor(
             @Suppress("DEPRECATION")
             packageInfo?.versionCode?.toLong() ?: 0L
         }
-        val activation = runCatching { visionEngine.currentActivation() }.getOrNull()
         return DiagnosticsExporter.buildReport(
             versionName = versionName,
             versionCode = versionCode,
@@ -180,29 +156,8 @@ class SettingsViewModel @Inject constructor(
                 lastError = mcp.lastError,
             ),
             debugFrameCount = mutableDebugFrameCount.value,
-            algorithm = activation?.let {
-                AlgorithmDiagnosticsSnapshot(
-                    algorithmId = it.profile.algorithmId,
-                    version = it.profile.version,
-                    generation = it.generation,
-                    usingBuiltinFallback = it.usingBuiltinFallback,
-                    loadError = it.loadError,
-                    nativeAvailable = NativeVision.isAvailable,
-                    pendingCatalogId = algorithmActivation.pendingCatalogId(),
-                    analysisRunning = algorithmActivation.isAnalysisRunning(),
-                )
-            },
             runtime = visionRuntime.status.value,
             appContext = appContext,
-        )
-    }
-
-    private fun bindAlgorithm(config: AppConfig) {
-        algorithmCatalog.bindSettings(
-            algorithm = config.algorithm,
-            sourcePreference = config.update.sourcePreference,
-            selectedScene = config.selectedScene,
-            wifiOnly = config.update.wifiOnly,
         )
     }
 
@@ -218,7 +173,6 @@ class SettingsViewModel @Inject constructor(
         mutableConfig.value = optimistic
         val isDirty = optimistic != baseline
         mutableDirty.value = isDirty
-        bindAlgorithm(optimistic)
         previewJob?.cancel()
         previewJob = viewModelScope.launch {
             editMutex.withLock {
@@ -252,22 +206,13 @@ class SettingsViewModel @Inject constructor(
 
     private suspend fun commitSave(): Boolean = editMutex.withLock {
         previewJob?.cancel()
-        // 运行时可能已 updateSavedPreservingPreview 自调触发距离；
-        // 用户未改对应滑条时，合并磁盘值，避免草稿保存盖回旧倍数。
-        val draft = mutableConfig.value
-        val disk = repository.snapshot()
-        val toWrite = mergeRuntimeOwnedAutomationFields(draft, baseline, disk)
+        val toWrite = mutableConfig.value
         return runCatching {
             repository.save(toWrite)
             val saved = repository.snapshot()
             baseline = saved
             mutableConfig.value = saved
             mutableDirty.value = false
-            bindAlgorithm(saved)
-            algorithmActivation.onConfigCommitted(
-                config = saved.algorithm,
-                selectedScene = saved.selectedScene,
-            )
             AppLog.i(
                 "settings",
                 "settings saved developer=${saved.developer.enabled} logLevel=${saved.developer.logLevel}",
@@ -282,39 +227,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 对「草稿未改、磁盘已自调」的触发距离字段取磁盘值；用户在设置里改过的滑条保留草稿。
-     */
-    private fun mergeRuntimeOwnedAutomationFields(
-        draft: AppConfig,
-        base: AppConfig,
-        disk: AppConfig,
-    ): AppConfig {
-        val d = draft.automation
-        val b = base.automation
-        val s = disk.automation
-        fun pick(draftV: Float, baseV: Float, diskV: Float): Float =
-            if (draftV == baseV) diskV else draftV
-        return draft.copy(
-            automation = d.copy(
-                sweetTriggerDistancePlayerWidths = pick(
-                    d.sweetTriggerDistancePlayerWidths,
-                    b.sweetTriggerDistancePlayerWidths,
-                    s.sweetTriggerDistancePlayerWidths,
-                ),
-                bambooTriggerDistancePlayerWidths = pick(
-                    d.bambooTriggerDistancePlayerWidths,
-                    b.bambooTriggerDistancePlayerWidths,
-                    s.bambooTriggerDistancePlayerWidths,
-                ),
-                seaSaltTriggerDistancePlayerWidths = pick(
-                    d.seaSaltTriggerDistancePlayerWidths,
-                    b.seaSaltTriggerDistancePlayerWidths,
-                    s.seaSaltTriggerDistancePlayerWidths,
-                ),
-            ),
-        )
-    }
 
     private suspend fun commitDiscard() = editMutex.withLock {
         previewJob?.cancel()
@@ -323,7 +235,6 @@ class SettingsViewModel @Inject constructor(
         baseline = snap
         mutableConfig.value = snap
         mutableDirty.value = false
-        bindAlgorithm(snap)
         AppLog.i("settings", "settings draft discarded")
     }
 
@@ -472,50 +383,6 @@ class SettingsViewModel @Inject constructor(
         mutableUpdate.value = mutableUpdate.value.copy(message = "已忽略该版本（保存后生效）")
     }
 
-    fun refreshAlgorithms() = algorithmCatalog.refreshCatalog(force = true)
-
-    fun downloadAlgorithm(id: String) = algorithmCatalog.download(id)
-
-    fun cancelAlgorithmDownload(id: String) = algorithmCatalog.cancelDownload(id)
-
-    /** 一键升级：按目录控制器中的升级计划执行。 */
-    fun upgradeAlgorithms() {
-        algorithmCatalog.upgradeAll()
-    }
-
-    /** 清除升级提示（用户点了「忽略」）。 */
-    fun clearAlgorithmUpgradePrompt() {
-        algorithmCatalog.clearUpgradePrompt()
-    }
-
-    /**
-     * 钉选手动算法写入草稿预览；分析运行中由激活协调器在真正 [save] 后 pending。
-     * 若包仅支持单一赛季且与当前赛季不一致，自动切换到该赛季，避免「钉选了海盐包仍跑竹影」。
-     */
-    fun selectAlgorithm(id: String) {
-        val selected = algorithmCatalog.selectInstalled(id) ?: return
-        update { app ->
-            val scenes = selected.supportedScenes
-            val nextScene = when {
-                app.selectedScene in scenes -> app.selectedScene
-                scenes.size == 1 -> scenes.first()
-                else -> app.selectedScene
-            }
-            if (nextScene != app.selectedScene) {
-                AppLog.i(
-                    "algorithm",
-                    "selectAlgorithm auto scene ${app.selectedScene.name}→${nextScene.name} for ${selected.id}",
-                )
-            }
-            app.copy(
-                selectedScene = nextScene,
-                algorithm = app.algorithm.copy(
-                    selectionMode = top.azek431.hzzs.core.model.AlgorithmSelectionMode.MANUAL,
-                    pinnedAlgorithmId = selected.id,
-                ),
-            )
-        }
-    }
 
     private fun installedVersionCode(): Long {
         val packageInfo = if (Build.VERSION.SDK_INT >= 28) {

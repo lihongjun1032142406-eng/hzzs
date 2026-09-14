@@ -5,7 +5,7 @@ import org.json.JSONObject
 /**
  * MCP 工具执行器接口。
  *
- * 每个 [ToolExecutor] 负责一组内聚的工具（按 feature 分组，如运行时控制 / 设置写入 / 算法包管理）。
+ * 每个 [ToolExecutor] 负责一组内聚的工具（按 feature 分组，如运行时控制 / 设置写入 / 调试帧 / 系统）。
  * [McpActionRegistry] 作为门面（facade）负责参数校验 ([top.azek431.hzzs.mcp.McpActionRegistry.validateArguments])
  * 与权限仲裁 ([top.azek431.hzzs.mcp.McpActionRegistry.authorize])，再按工具名分发到对应执行器。
  *

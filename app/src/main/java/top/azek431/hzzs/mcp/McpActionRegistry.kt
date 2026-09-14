@@ -4,8 +4,6 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONArray
 import org.json.JSONObject
-import top.azek431.hzzs.core.algorithm.AlgorithmCatalogController
-import top.azek431.hzzs.core.algorithm.AlgorithmPipelineTrace
 import top.azek431.hzzs.core.logging.AppLog
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.AppLogLevel
@@ -14,17 +12,13 @@ import top.azek431.hzzs.core.model.CaptureBackend
 import top.azek431.hzzs.core.model.GestureBackend
 import top.azek431.hzzs.core.model.McpPermissionLevel
 import top.azek431.hzzs.core.model.McpToolPolicy
-import top.azek431.hzzs.core.model.ObstacleKind
 import top.azek431.hzzs.core.model.OverlayOrientation
 import top.azek431.hzzs.core.model.OverlayStyle
 import top.azek431.hzzs.core.model.OverlayTheme
-import top.azek431.hzzs.core.model.PlayerReferenceMode
-import top.azek431.hzzs.core.model.SceneId
 import top.azek431.hzzs.core.model.ThemePreset
 import top.azek431.hzzs.core.preferences.SettingsRepository
 import top.azek431.hzzs.data.vision.DebugFrameRecorder
 import top.azek431.hzzs.data.vision.VisionRuntimeController
-import top.azek431.hzzs.domain.vision.VisionEngine
 import top.azek431.hzzs.platform.compat.SystemCapabilityAccess
 import top.azek431.hzzs.platform.compat.resolveEffectiveGestureBackend
 import top.azek431.hzzs.service.automation.HzzsAccessibilityService
@@ -64,8 +58,6 @@ class McpActionRegistry @Inject constructor(
     private val runtime: VisionRuntimeController,
     private val uiBridge: McpUiBridge,
     private val debugFrames: DebugFrameRecorder,
-    private val algorithmCatalog: AlgorithmCatalogController,
-    private val visionEngine: VisionEngine,
     private val executors: @JvmSuppressWildcards Set<ToolExecutor>,
 ) : McpActionSurface {
     private val executorIndex: Map<String, ToolExecutor> = buildMap {
@@ -84,12 +76,8 @@ class McpActionRegistry @Inject constructor(
         "app://runtime/snapshot" -> runtimeSnapshot()
         "app://settings/current" -> JSONObject(settings.exportJsonRedacted(settings.current()))
         "app://settings/schema" -> settingsSchema()
-        "app://vision/latest" -> runtime.latestResult.value?.toJson() ?: JSONObject.NULL.asObject()
-        "app://vision/metrics" -> runtime.status.value.toJson()
+        "app://runtime/metrics" -> runtime.status.value.toJson()
         "app://debug/frames" -> debugFrameMetadata()
-        "app://algorithm/active" -> activeAlgorithmJson()
-        "app://algorithm/catalog" -> algorithmCatalogJson()
-        "app://algorithm/pipeline" -> algorithmPipelineJson()
         "app://automation/gates" -> automationGatesJson()
         "app://permissions" -> permissionsJson()
         "app://logs/recent" -> logsJson(limit = 80, newestFirst = true)
@@ -225,176 +213,20 @@ class McpActionRegistry @Inject constructor(
         put("permissionLevels", JSONArray(McpPermissionLevel.entries.map { it.name }))
         put("mcpToolPolicies", JSONArray(McpToolPolicy.entries.map { it.name }))
         put("mcpTools", JSONArray(McpToolCatalog.tools.map { it.name }))
-        put("scenes", JSONArray(SceneId.entries.map { it.name }))
         put("themeModes", JSONArray(AppThemeMode.entries.map { it.name }))
         put("themePresets", JSONArray(ThemePreset.entries.map { it.name }))
         put("overlayStyles", JSONArray(OverlayStyle.entries.map { it.name }))
         put("overlayThemes", JSONArray(OverlayTheme.entries.map { it.name }))
         put("overlayOrientations", JSONArray(OverlayOrientation.entries.map { it.name }))
-        put("playerReferenceModes", JSONArray(PlayerReferenceMode.entries.map { it.name }))
-        put("obstacleKinds", JSONArray(ObstacleKind.entries.map { it.name }))
-    }
-
-    private suspend fun runtimeSnapshot(): JSONObject {
-        val status = runtime.status.value
-        val latest = runtime.latestResult.value
-        val cfg = settings.current()
-        val activation = visionEngine.currentActivation()
-        return JSONObject().apply {
-            put("status", status.toJson())
-            put("latest", latest?.toJson() ?: JSONObject.NULL)
-            put(
-                "latestSummary",
-                latest?.let { r ->
-                    JSONObject().apply {
-                        put("scene", r.scene.name)
-                        put("sceneConfidence", r.sceneConfidence.toDouble())
-                        put("detectionCount", r.detections.size)
-                        put(
-                            "kindHistogram",
-                            JSONObject().apply {
-                                r.detections.groupingBy { it.kind.name }.eachCount().forEach { (k, v) ->
-                                    put(k, v)
-                                }
-                            },
-                        )
-                        put(
-                            "hasPlayer",
-                            r.detections.any {
-                                it.kind == top.azek431.hzzs.domain.vision.ObjectKind.PLAYER
-                            },
-                        )
-                    }
-                } ?: JSONObject.NULL,
-            )
-            put("algorithm", activeAlgorithmJson())
-            put("automationGates", automationGatesJson())
-            put("selectedScene", cfg.selectedScene.name)
-            put("captureBackend", cfg.captureBackend.name)
-            put("overlayEnabled", cfg.overlay.enabled)
-            put("developerEnabled", cfg.developer.enabled)
-            put("pipelineRevision", AlgorithmPipelineTrace.revision())
-            put("activationGeneration", activation.generation)
-        }
-    }
-
-    private fun activeAlgorithmJson(): JSONObject {
-        val activation = visionEngine.currentActivation()
-        val catalog = algorithmCatalog.state.value
-        return JSONObject().apply {
-            put("id", activation.profile.algorithmId)
-            put("version", activation.profile.version)
-            put("generation", activation.generation)
-            put("usingBuiltinFallback", activation.usingBuiltinFallback)
-            put("loadError", activation.loadError ?: JSONObject.NULL)
-            put("catalogActiveId", catalog.active?.id ?: JSONObject.NULL)
-            put("pendingActivationId", catalog.pendingActivation?.id ?: JSONObject.NULL)
-            put("selectionMode", catalog.selectionMode.name)
-            put("channel", catalog.channel.name)
-            put("analysisRunning", catalog.analysisRunning)
-        }
-    }
-
-    private fun algorithmCatalogJson(): JSONObject {
-        val state = algorithmCatalog.state.value
-        return JSONObject().apply {
-            put("phase", phaseName(state.phase))
-            put("message", state.message ?: JSONObject.NULL)
-            put("selectionMode", state.selectionMode.name)
-            put("channel", state.channel.name)
-            put("analysisRunning", state.analysisRunning)
-            put("active", state.active?.let { AlgorithmPackageInfoToJson(it) } ?: JSONObject.NULL)
-            put("pendingActivation", state.pendingActivation?.let { AlgorithmPackageInfoToJson(it) } ?: JSONObject.NULL)
-            put("installed", JSONArray(state.installed.map { AlgorithmPackageInfoToJson(it) }))
-            put("remote", JSONArray(state.remote.map { AlgorithmPackageInfoToJson(it) }))
-            put(
-                "downloads",
-                JSONObject().apply {
-                    state.downloads.forEach { (id, task) ->
-                        put(
-                            id,
-                            JSONObject()
-                                .put("progress", task.progress.toDouble())
-                                .put("verifying", task.verifying)
-                                .put("error", task.error ?: JSONObject.NULL),
-                        )
-                    }
-                },
-            )
-            put("lastCheckedAtEpochMs", state.lastCheckedAtEpochMs ?: JSONObject.NULL)
-        }
-    }
-
-    private fun AlgorithmPackageInfoToJson(info: top.azek431.hzzs.core.algorithm.AlgorithmPackageInfo): JSONObject =
-        JSONObject()
-            .put("id", info.id)
-            .put("name", info.name)
-            .put("versionName", info.versionName)
-            .put("versionCode", info.versionCode)
-            .put("channel", info.channel.name)
-            .put("origin", info.origin.name)
-            .put("isCompatible", info.isCompatible)
-            .put("isInstalled", info.isInstalled)
-            .put("isBuiltin", info.isBuiltin)
-            .put("summary", info.summary)
-            .put("author", info.author ?: JSONObject.NULL)
-            .put("supportedScenes", JSONArray(info.supportedScenes.map { it.name }))
-
-    private fun algorithmPipelineJson(): JSONObject {
-        val snap = AlgorithmPipelineTrace.snapshot()
-        return JSONObject().apply {
-            put("revision", snap.revision)
-            put("catalogId", snap.catalogId ?: JSONObject.NULL)
-            put("selectionMode", snap.selectionMode ?: JSONObject.NULL)
-            put("selectedScene", snap.selectedScene ?: JSONObject.NULL)
-            put(
-                "stages",
-                JSONArray().apply {
-                    snap.stages.forEach { stage ->
-                        put(
-                            JSONObject()
-                                .put("id", stage.id)
-                                .put("title", stage.title)
-                                .put("status", stage.status.name)
-                                .put("detail", stage.detail ?: JSONObject.NULL)
-                                .put("updatedAtEpochMs", stage.updatedAtEpochMs),
-                        )
-                    }
-                },
-            )
-            put(
-                "lastFrame",
-                snap.lastFrame?.let { f ->
-                    JSONObject()
-                        .put("epochMs", f.epochMs)
-                        .put("scene", f.scene)
-                        .put("sceneConfidence", f.sceneConfidence.toDouble())
-                        .put("hasPlayer", f.hasPlayer)
-                        .put("obstacleCount", f.obstacleCount)
-                        .put("actionableCount", f.actionableCount)
-                        .put("kindHistogram", f.kindHistogram)
-                        .put("processingMs", f.processingMs.toDouble())
-                        .put("algorithmId", f.algorithmId)
-                        .put("algorithmVersion", f.algorithmVersion)
-                        .put("generation", f.generation)
-                        .put("usingBuiltinFallback", f.usingBuiltinFallback)
-                        .put("loadError", f.loadError ?: JSONObject.NULL)
-                        .put("frameError", f.frameError ?: JSONObject.NULL)
-                } ?: JSONObject.NULL,
-            )
-        }
     }
 
     private suspend fun automationGatesJson(): JSONObject {
         // automation / 手势后端以 saved 为准（与 VisionRuntimeController 一致）；草稿不派发。
         val saved = settings.snapshot()
         val status = runtime.status.value
-        val latest = runtime.latestResult.value
         val a11y = HzzsAccessibilityService.isConnected()
         val auto = saved.automation
         val disclaimerOk = auto.disclaimerAcceptedVersion >= AppConfig.DISCLAIMER_VERSION
-        val sceneConf = latest?.sceneConfidence
-        val sceneOk = sceneConf == null || sceneConf >= auto.minimumSceneConfidence
         val gestureRequested = auto.gestureBackend
         val gestureEffective = when {
             status.running -> status.activeGestureBackend
@@ -421,6 +253,8 @@ class McpActionRegistry @Inject constructor(
         val packageBlocked = auto.restrictPackages &&
             (fg == null || fg.packageName !in auto.allowedPackages)
         val blockers = buildList {
+            // Clean Base：真实动作总闸恒关，任何自动操作都必须在此被拦下。
+            if (!AppConfig.ACTION_ENABLED) add("action_disabled clean_base")
             if (!auto.enabled) add("automation.enabled=false")
             if (!disclaimerOk) {
                 add("disclaimerAcceptedVersion=${auto.disclaimerAcceptedVersion}<${AppConfig.DISCLAIMER_VERSION}")
@@ -428,9 +262,6 @@ class McpActionRegistry @Inject constructor(
             if (!status.running) add("analysis.not_running")
             if (!a11y && needsA11y) {
                 add("accessibility.not_connected")
-            }
-            if (!sceneOk) {
-                add("sceneConfidence=${sceneConf ?: "n/a"}<minimum=${auto.minimumSceneConfidence}")
             }
             if (packageBlocked) {
                 add(
@@ -442,6 +273,8 @@ class McpActionRegistry @Inject constructor(
         }
         return JSONObject().apply {
             put("source", "saved")
+            put("cleanBase", AppConfig.JINCHAN_CLEAN_BASE)
+            put("actionEnabled", AppConfig.ACTION_ENABLED)
             put("automationEnabled", auto.enabled)
             put("gestureBackend", gestureRequested.name)
             put("activeGestureBackend", gestureEffective.name)
@@ -450,13 +283,6 @@ class McpActionRegistry @Inject constructor(
             put("disclaimerOk", disclaimerOk)
             put("analysisRunning", status.running)
             put("accessibilityConnected", a11y)
-            put("selectedScene", saved.selectedScene.name)
-            put("sceneConfidence", sceneConf?.toDouble() ?: JSONObject.NULL)
-            put("minimumSceneConfidence", auto.minimumSceneConfidence.toDouble())
-            put("sceneConfidenceOk", sceneOk)
-            // legacy 字段：运行时不再硬锁竹影；保留只读兼容。
-            put("bambooExperimentalAutoAction", auto.bambooExperimentalAutoAction)
-            put("bambooLockActive", false)
             put("restrictPackages", auto.restrictPackages)
             put("allowedPackages", JSONArray(auto.allowedPackages.sorted()))
             put("foregroundPackage", fg?.packageName ?: JSONObject.NULL)
@@ -464,9 +290,8 @@ class McpActionRegistry @Inject constructor(
                 "foregroundSource",
                 if (needsA11y) "accessibility" else "accessibility_probe_for_package_gate",
             )
-            put("lastAutomationDecision", status.lastAutomationDecision ?: JSONObject.NULL)
             put("maxActionsPerSecond", auto.maxActionsPerSecond)
-            put("canDispatchLikely", blockers.isEmpty())
+            put("canDispatchLikely", false)
             put("blockers", JSONArray(blockers))
         }
     }
@@ -547,19 +372,6 @@ class McpActionRegistry @Inject constructor(
         }
         return JSONObject().put("tools", arr).put("count", arr.length())
     }
-
-    private fun phaseName(phase: top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase): String = when (phase) {
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.Idle -> "Idle"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.Loading -> "Loading"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.Empty -> "Empty"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.OfflineWithCache -> "OfflineWithCache"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.MirrorFallback -> "MirrorFallback"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.Downloading -> "Downloading"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.Verifying -> "Verifying"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.PendingActivation -> "PendingActivation"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.Error -> "Error"
-        is top.azek431.hzzs.core.algorithm.AlgorithmCatalogPhase.Incompatible -> "Incompatible"
-    }
 }
 
 private fun Any?.asObject(): JSONObject = JSONObject().put("value", this)
@@ -571,46 +383,11 @@ internal fun top.azek431.hzzs.core.model.RuntimeStatus.toJson() = JSONObject().a
     put("captureReady", captureReady)
     put("overlayVisible", overlayVisible)
     put("overlayBlockReason", overlayBlockReason?.name ?: JSONObject.NULL)
-    put("activeScene", activeScene.name)
     put("activeBackend", activeBackend.name)
     put("activeGestureBackend", activeGestureBackend.name)
     put("fps", fps.toDouble())
-    put("processingMs", processingMs.toDouble())
-    put("obstacleCount", obstacleCount)
     lastError?.let { put("lastError", it) }
-    lastAutomationDecision?.let { put("lastAutomationDecision", it) }
+    put("actionEnabled", AppConfig.ACTION_ENABLED)
+    put("cleanBase", AppConfig.JINCHAN_CLEAN_BASE)
 }
 
-internal fun top.azek431.hzzs.domain.vision.VisionResult.toJson() = JSONObject().apply {
-    put("scene", scene.name)
-    put("sceneConfidence", sceneConfidence.toDouble())
-    put("processingNanos", processingNanos)
-    if (timing.totalNs > 0) {
-        put(
-            "timing",
-            JSONObject().apply {
-                put("jniPrepMs", (timing.jniPrepNs / 1_000_000.0))
-                put("detectMs", (timing.detectNs / 1_000_000.0))
-                put("postfilterMs", (timing.postfilterNs / 1_000_000.0))
-                put("finalizeMs", (timing.finalizeNs / 1_000_000.0))
-            },
-        )
-    }
-    put(
-        "detections",
-        JSONArray().apply {
-            detections.forEach { detection ->
-                put(
-                    JSONObject().apply {
-                        put("kind", detection.kind.name)
-                        put("confidence", detection.confidence.toDouble())
-                        put("left", detection.bounds.left.toDouble())
-                        put("top", detection.bounds.top.toDouble())
-                        put("right", detection.bounds.right.toDouble())
-                        put("bottom", detection.bounds.bottom.toDouble())
-                    },
-                )
-            }
-        },
-    )
-}

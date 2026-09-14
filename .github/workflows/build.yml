@@ -1,7 +1,7 @@
 name: Build
 on:
   push:
-    branches: [main, chatgpt/rewrite-v0.2.0-unified]
+    branches: [main, chatgpt/rewrite-v0.2.0-unified, jinchan-clean-base]
   pull_request:
   workflow_dispatch:
 
@@ -20,23 +20,17 @@ jobs:
           java-version: '17'
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - name: Install Android native toolchain
-        run: sdkmanager "ndk;28.2.13676358" "cmake;3.22.1"
       - name: Verify Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
       - name: Install Python verification dependencies
         run: >-
           python3 -m pip install --disable-pip-version-check --quiet
-          numpy opencv-python-headless Pillow
+          Pillow opencv-python-headless
       - name: Python syntax and resource integrity
         run: |
           python3 -m compileall -q tools
           python3 tools/quality/check_resources.py
           python3 tools/quality/check_project.py
-      - name: Native sanitizer and host ABI tests
-        run: |
-          bash tools/vision/run_native_sanitizers.sh
-          python3 tools/vision/run_host_tests.py
       - name: Unit tests, lint and debug APK
         run: ./gradlew --no-daemon --continue clean testDebugUnitTest lintDebug assembleDebug
       - uses: actions/upload-artifact@v4

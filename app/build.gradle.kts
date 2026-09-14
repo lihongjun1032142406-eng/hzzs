@@ -79,40 +79,11 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-// 本机可用 -Phzzs.native.abis=arm64-v8a、环境变量 HZZS_NATIVE_ABIS，
-// 或 gitignore 的 gradle.local.properties。未设置时保持完整 ABI。
-val localGradleProperties = Properties().apply {
-    val file = rootProject.file("gradle.local.properties")
-    if (file.isFile) {
-        file.inputStream().use { load(it) }
-    }
-}
-
-fun localOrGradleOrEnv(key: String, envName: String): String? {
-    providers.gradleProperty(key).orNull?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
-    localGradleProperties.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
-    return providers.environmentVariable(envName).orNull?.trim()?.takeIf { it.isNotEmpty() }
-}
-
-val configuredNativeAbis: List<String> = (
-    localOrGradleOrEnv("hzzs.native.abis", "HZZS_NATIVE_ABIS")
-        ?: "arm64-v8a,armeabi-v7a,x86_64"
-    )
-    .split(',')
-    .map { it.trim() }
-    .filter { it.isNotEmpty() }
-    .distinct()
-val allowedNativeAbis = setOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
-require(configuredNativeAbis.isNotEmpty()) { "hzzs.native.abis must not be empty" }
-require(configuredNativeAbis.all { it in allowedNativeAbis }) {
-    "Unsupported ABI in hzzs.native.abis: $configuredNativeAbis (allowed=$allowedNativeAbis)"
-}
-// CMake/ninja 并行：由 gradlew.bat / VS Code tasks 设 CMAKE_BUILD_PARALLEL_LEVEL（默认 2），
-// 勿在此用反射改进程环境（脆弱且对已启动的 daemon 无效）。
+// Clean Base：HZZS 原游戏视觉算法的原生视觉库（app/src/main/cpp + jni_bridge）已整体清退，
+// 本模块不声明 NDK / CMake 原生构建；构建不再需要 Android NDK。
 android {
     namespace = "top.azek431.hzzs"
     compileSdk = 37
-    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "top.azek431.hzzs"
@@ -128,31 +99,6 @@ android {
         buildConfigField("String", "GITHUB_OWNER", "\"Azek431\"")
         buildConfigField("String", "GITHUB_REPO", "\"hzzs\"")
 
-        externalNativeBuild {
-            cmake {
-                // RTTI 未使用；异常需保留（jni_bridge 捕获 bad_alloc）。
-                cppFlags += listOf(
-                    "-std=c++17",
-                    "-Wall",
-                    "-Wextra",
-                    "-Werror",
-                    "-fno-rtti",
-                    "-fvisibility=hidden",
-                    "-ffunction-sections",
-                    "-fdata-sections",
-                )
-                // 不覆盖 ANDROID_STL（沿用 AGP/NDK 默认）。
-                arguments += listOf(
-                    "-DANDROID_CPP_FEATURES=exceptions",
-                    "-DCMAKE_CXX_STANDARD=17",
-                    "-DCMAKE_CXX_STANDARD_REQUIRED=ON",
-                )
-            }
-        }
-        ndk {
-            abiFilters.clear()
-            abiFilters += configuredNativeAbis
-        }
     }
 
     signingConfigs {
@@ -176,7 +122,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            // Debug 仍链接可调试符号；原生优化留给 CMake Debug 配置
+            // Debug 保留可调试符号（无原生库时该开关不影响构建）
             isJniDebuggable = true
             isMinifyEnabled = false
             isShrinkResources = false
@@ -189,13 +135,6 @@ android {
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            externalNativeBuild {
-                cmake {
-                    // Release 原生：O3 + 段回收，体积与热路径速度兼顾
-                    cppFlags += listOf("-O3", "-DNDEBUG")
-                    arguments += listOf("-DCMAKE_BUILD_TYPE=Release")
-                }
-            }
         }
     }
 
@@ -207,12 +146,6 @@ android {
         resValues = false
         shaders = false
         viewBinding = false
-    }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

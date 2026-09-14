@@ -3,13 +3,9 @@ package top.azek431.hzzs.service.overlay
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.DashPathEffect
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.PorterDuff
 import android.os.Build
-import android.os.SystemClock
 import android.provider.Settings
 import android.view.Choreographer
 import android.view.Gravity
@@ -22,148 +18,100 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import top.azek431.hzzs.core.model.OverlayBlockReason
 import top.azek431.hzzs.core.model.OverlayConfig
-import top.azek431.hzzs.core.model.OverlayOrientation
-import top.azek431.hzzs.core.model.OverlayStyle
 import top.azek431.hzzs.core.model.OverlayTheme
 import top.azek431.hzzs.core.model.RuntimeStatus
-import top.azek431.hzzs.core.model.detectionKindDisplayName
 import top.azek431.hzzs.core.model.displayName
-import top.azek431.hzzs.core.model.humanizeAutomationDecision
-import top.azek431.hzzs.domain.vision.Detection
-import top.azek431.hzzs.domain.vision.FilteredDetection
-import top.azek431.hzzs.domain.vision.MulticolorDiag
-import top.azek431.hzzs.domain.vision.NormalizedRect
-import top.azek431.hzzs.domain.vision.StageTiming
-import top.azek431.hzzs.domain.vision.VisionResult
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.math.max
 import kotlin.math.roundToInt
+
 /**
- * 主线程持有的持久悬浮窗控制器（**呈现层**，不执行算法）。
+ * 主线程持有的持久悬浮窗控制器（**呈现层**）。
+ *
+ * Clean Base：悬浮窗只呈现**运行时状态文本**（运行中 / 截图就绪 / FPS / 后端 /
+ * 错误与拦截原因）。检测框、检测轮廓、诊断框等“算法结果可视化”已随
+ * HZZS 原游戏视觉算法层一起清退，本类不再消费任何检测模型。
  *
  * 线程不变量：所有 WindowManager.add/update/remove 与 View 更新必须在主线程
  *（本类统一 [Dispatchers.Main.immediate]）。
  *
- * 与算法的关联：只消费 [VisionResult] / [Detection]（算法计算结果）。
- * 算法包与找色引擎不绘制；是否画框由 [OverlayConfig.showBoxes] 等配置决定。
- *
- * 双窗架构（默认）：
- * - 穿透全屏层：FLAG_NOT_TOUCHABLE，绘制检测框 / 坐标网格，不挡游戏手势；
- * - 交互 HUD 层：WRAP_CONTENT 可拖拽贴边，展示状态文字，不绘制全屏框。
- *
- * 安全：无悬浮窗权限或配置关闭时立即移除视图；add/update 失败 fail-closed 隐藏。
- * 坐标：检测框为视口归一化 [0,1]，仅在绘制层换算像素。
+ * 安全：
+ * - 默认关闭（[AppConfig.OVERLAY_DEFAULT_ENABLED] = false），需用户在设置页显式开启；
+ * - 无悬浮窗权限或配置关闭时立即移除视图；add/update 失败 fail-closed 隐藏；
+ * - [OverlayConfig.clickThrough] 默认 true，不拦截游戏手势。
  */
 @Singleton
 class OverlayController @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) {
     private val windowManager = context.getSystemService(WindowManager::class.java)
-    private var passThroughView: VisionOverlayView? = null
-    private var passThroughParams: WindowManager.LayoutParams? = null
-    private var hudView: VisionOverlayView? = null
+    private var hudView: StatusOverlayView? = null
     private var hudParams: WindowManager.LayoutParams? = null
     private var currentConfig = OverlayConfig()
     private var positionX = 12
     private var positionY = 96
 
     /**
-     * 显示或更新双层悬浮窗。
+     * 显示或更新状态悬浮窗。
      *
-     * @param runtimeStatus 当前运行时状态；仅用于 HUD 展示「前台包 / 自动操作门控原因」，
-     *   null 时不绘制该附加行（不影响检测框层）。
-     * @return [OverlayShowResult]：是否至少一层挂载成功，以及失败原因（若有）。
+     * @param runtimeStatus 当前运行时状态；null 时只显示静态标题行。
+     * @return [OverlayShowResult]：是否挂载成功，以及失败原因（若有）。
      */
     suspend fun show(
         config: OverlayConfig,
-        result: VisionResult?,
-        showCoordinateGrid: Boolean = false,
         runtimeStatus: RuntimeStatus? = null,
     ): OverlayShowResult =
         withContext(Dispatchers.Main.immediate) {
             if (!config.enabled) {
                 hideInternal()
-                return@withContext OverlayShowResult(visible = false, blockReason = OverlayBlockReason.DISABLED)
+                return@withContext OverlayShowResult(
+                    visible = false,
+                    blockReason = OverlayBlockReason.DISABLED,
+                )
             }
             if (!Settings.canDrawOverlays(context)) {
                 hideInternal()
-                return@withContext OverlayShowResult(visible = false, blockReason = OverlayBlockReason.PERMISSION)
+                return@withContext OverlayShowResult(
+                    visible = false,
+                    blockReason = OverlayBlockReason.PERMISSION,
+                )
             }
 
             currentConfig = config
-            val passParams = createPassThroughParams()
-            val interactiveParams = createInteractiveParams()
-
-            val passOk = ensureView(
-                current = passThroughView,
-                params = passParams,
-                storedParams = passThroughParams,
-                role = OverlayLayerRole.PASS_THROUGH_BOXES,
-                onCreated = { view, layout ->
-                    passThroughView = view
-                    passThroughParams = layout
-                },
-                onUpdated = { passThroughParams = it },
-                onFailed = { hidePassThrough() },
-            )
-            if (!passOk) {
-                hideInternal()
-                return@withContext OverlayShowResult(visible = false, blockReason = OverlayBlockReason.ADD_VIEW_FAILED)
-            }
-
-            val hudOk = ensureView(
-                current = hudView,
-                params = interactiveParams,
-                storedParams = hudParams,
-                role = OverlayLayerRole.INTERACTIVE_HUD,
-                onCreated = { view, layout ->
-                    hudView = view
-                    hudParams = layout
-                },
-                onUpdated = { hudParams = it },
-                onFailed = { hideHud() },
-            )
-            if (!hudOk) {
-                hideInternal()
-                return@withContext OverlayShowResult(visible = false, blockReason = OverlayBlockReason.ADD_VIEW_FAILED)
-            }
-
-            passThroughView?.update(config, result, showCoordinateGrid, OverlayLayerRole.PASS_THROUGH_BOXES)
-            hudView?.update(config, result, showCoordinateGrid, OverlayLayerRole.INTERACTIVE_HUD, runtimeStatus)
+            val params = createParams()
+            val view = ensureHud(params)
+                ?: run {
+                    hideInternal()
+                    return@withContext OverlayShowResult(
+                        visible = false,
+                        blockReason = OverlayBlockReason.ADD_VIEW_FAILED,
+                    )
+                }
+            view.update(config, runtimeStatus)
             OverlayShowResult(visible = true, blockReason = null)
         }
 
     suspend fun hide() = withContext(Dispatchers.Main.immediate) { hideInternal() }
 
     /**
-     * 截图前临时隐藏已挂载 HUD/检测层，但不移除 Window，避免每帧 add/remove 抖动。
+     * 截图前临时隐藏已挂载 HUD，但不移除 Window，避免每帧 add/remove 抖动。
      * 等待一次主显示帧提交，调用方随后再排空可能含旧合成层的捕获帧。
      */
     suspend fun suspendForCapture(): Boolean = withContext(Dispatchers.Main.immediate) {
-        val targets = listOfNotNull(passThroughView, hudView)
-        if (targets.isEmpty()) return@withContext false
-        var anyVisible = false
-        targets.forEach { view ->
-            if (view.visibility == View.VISIBLE) {
-                anyVisible = true
-                view.visibility = View.INVISIBLE
-            }
-        }
-        if (!anyVisible) return@withContext false
+        val view = hudView ?: return@withContext false
+        if (view.visibility != View.VISIBLE) return@withContext false
+        view.visibility = View.INVISIBLE
         awaitNextDisplayFrame()
         true
     }
 
-    /** 输入缓冲取得后立即恢复上一轮 HUD；识别仍读取独立的干净像素缓冲。 */
+    /** 输入缓冲取得后立即恢复上一轮 HUD；截图仍读取独立的干净像素缓冲。 */
     suspend fun resumeAfterCapture(): Boolean = withContext(Dispatchers.Main.immediate) {
-        val targets = listOfNotNull(passThroughView, hudView)
-        if (targets.isEmpty()) return@withContext false
-        targets.forEach { view ->
-            view.visibility = View.VISIBLE
-            view.invalidate()
-        }
+        val view = hudView ?: return@withContext false
+        view.visibility = View.VISIBLE
+        view.invalidate()
         true
     }
 
@@ -178,758 +126,210 @@ class OverlayController @Inject constructor(
         }
     }
 
-    private fun ensureView(
-        current: VisionOverlayView?,
-        params: WindowManager.LayoutParams,
-        storedParams: WindowManager.LayoutParams?,
-        role: OverlayLayerRole,
-        onCreated: (VisionOverlayView, WindowManager.LayoutParams) -> Unit,
-        onUpdated: (WindowManager.LayoutParams) -> Unit,
-        onFailed: () -> Unit,
-    ): Boolean {
-        if (current == null) {
-            val created = VisionOverlayView(context, role, ::moveInteractiveWindow)
-            if (runCatching { windowManager.addView(created, params) }.isFailure) {
-                onFailed()
-                return false
+    private fun ensureHud(params: WindowManager.LayoutParams): StatusOverlayView? {
+        hudView?.let { existing ->
+            val stored = hudParams
+            if (stored != null && stored.layoutSignature() != params.layoutSignature()) {
+                runCatching { windowManager.updateViewLayout(existing, params) }
+                    .onFailure { return null }
+            } else {
+                runCatching { windowManager.updateViewLayout(existing, params) }
             }
-            onCreated(created, params)
-            return true
+            hudParams = params
+            return existing
         }
-        val previous = storedParams
-        if (previous == null || previous.layoutSignature() != params.layoutSignature()) {
-            if (runCatching { windowManager.updateViewLayout(current, params) }.isFailure) {
-                onFailed()
-                return false
-            }
-            onUpdated(params)
+        val created = StatusOverlayView(context) { deltaX, deltaY, released ->
+            moveWindow(deltaX, deltaY, released)
         }
-        return true
+        return runCatching {
+            windowManager.addView(created, params)
+            hudView = created
+            hudParams = params
+            created
+        }.getOrNull()
     }
 
     private fun hideInternal() {
-        hidePassThrough()
-        hideHud()
-    }
-
-    private fun hidePassThrough() {
-        passThroughView?.let { current ->
-            current.visibility = View.VISIBLE
-            runCatching { windowManager.removeViewImmediate(current) }
-        }
-        passThroughView = null
-        passThroughParams = null
-    }
-
-    private fun hideHud() {
-        hudView?.let { current ->
-            current.visibility = View.VISIBLE
-            runCatching { windowManager.removeViewImmediate(current) }
-        }
+        val view = hudView ?: return
+        runCatching { windowManager.removeView(view) }
         hudView = null
         hudParams = null
     }
 
-    private fun createPassThroughParams(): WindowManager.LayoutParams {
-        val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        return WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            overlayType(),
-            flags,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 0
-        }
-    }
-
-    private fun createInteractiveParams(): WindowManager.LayoutParams {
-        val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-        return WindowManager.LayoutParams(
+    private fun createParams(): WindowManager.LayoutParams =
+        WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType(),
-            flags,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = positionX
             y = positionY
+            if (currentConfig.clickThrough) {
+                flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            }
+        }
+
+    private fun moveWindow(deltaX: Int, deltaY: Int, released: Boolean) {
+        val view = hudView ?: return
+        val params = hudParams ?: return
+        if (currentConfig.lockPosition) return
+
+        positionX += deltaX
+        positionY += deltaY
+        val bounds = context.resources.displayMetrics
+        val maxX = max(0, bounds.widthPixels - view.width)
+        val maxY = max(0, bounds.heightPixels - view.height)
+        positionX = positionX.coerceIn(0, maxX)
+        positionY = positionY.coerceIn(0, maxY)
+        params.x = positionX
+        params.y = positionY
+        runCatching { windowManager.updateViewLayout(view, params) }
+        if (released && currentConfig.snapToEdge) {
+            val snapX = if (positionX + view.width / 2 < bounds.widthPixels / 2) 0 else max(0, maxX)
+            if (snapX != positionX) {
+                positionX = snapX
+                params.x = snapX
+                runCatching { windowManager.updateViewLayout(view, params) }
+            }
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun overlayType(): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else {
-            @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-    /** 主线程拖拽交互窗；锁定位置时忽略。松手且开启贴边时吸附左右边缘。 */
-    private fun moveInteractiveWindow(deltaX: Int, deltaY: Int, released: Boolean) {
-        val current = hudView ?: return
-        val params = hudParams ?: return
-        if (currentConfig.lockPosition) return
-
-        val metrics = context.resources.displayMetrics
-        val maxX = max(0, metrics.widthPixels - current.width)
-        val maxY = max(0, metrics.heightPixels - current.height)
-        positionX = (positionX + deltaX).coerceIn(0, maxX)
-        positionY = (positionY + deltaY).coerceIn(0, maxY)
-        if (released && currentConfig.snapToEdge) {
-            positionX = if (positionX + current.width / 2 < metrics.widthPixels / 2) 0 else maxX
-        }
-        params.x = positionX
-        params.y = positionY
-        runCatching { windowManager.updateViewLayout(current, params) }
-    }
-
     private fun WindowManager.LayoutParams.layoutSignature(): List<Int> =
-        listOf(width, height, type, flags, x, y)
-}
+        listOf(x, y, width, height, flags, gravity)
 
-/** 悬浮窗展示结果：可见性 + 与分析错误分离的阻塞原因。 */
-data class OverlayShowResult(
-    val visible: Boolean,
-    val blockReason: OverlayBlockReason?,
-)
-
-/** 双层悬浮窗角色：穿透检测框 vs 交互 HUD。 */
-private enum class OverlayLayerRole {
-    PASS_THROUGH_BOXES,
-    INTERACTIVE_HUD,
-}
-
-/**
- * 悬浮窗内容 View：按 [role] 只承担一层职责。
- * 内容签名去重避免无变化 invalidate。
- */
-private class VisionOverlayView(
-    context: Context,
-    private val role: OverlayLayerRole,
-    private val onMove: (deltaX: Int, deltaY: Int, released: Boolean) -> Unit,
-) : View(context) {
-    private val density = resources.displayMetrics.density
-    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val contourPath = Path()
-    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        typeface = android.graphics.Typeface.create(
-            android.graphics.Typeface.MONOSPACE,
-            android.graphics.Typeface.BOLD,
-        )
-    }
-
-    private var config = OverlayConfig()
-    private var result: VisionResult? = null
-    private var showCoordinateGrid = false
-    private var runtimeStatus: RuntimeStatus? = null
-    private var lastContentSignature = Int.MIN_VALUE
-    private var lastRawX = 0f
-    private var lastRawY = 0f
-    /** 仅 HUD 用的短时残留框；不参与规划。 */
-    private val persistedBoxes = LinkedHashMap<Long, PersistedBox>()
-    private var lastPersistPruneAtMs = 0L
-    /** 多点找色命中点（仅 DEBUG_HUD + 诊断开关开时绘制）。 */
-    private var multicolorHitPoints: List<Pair<Float, Float>> = emptyList()
-    /** 被尺寸窗剔除的障碍框（仅 DEBUG_HUD + 诊断开关开时绘制）。 */
-    private var filteredOut: List<FilteredDetection> = emptyList()
-    /** 多点找色搜索区（仅 DEBUG_HUD + 诊断开关开时绘制搜索区矩形）。 */
-    private var multicolorSearchRegions: List<NormalizedRect> = emptyList()
-    /** 当前分析帧宽高（用于命中点坐标换算；未设置时命中点不绘制）。 */
-    private var frameWidth: Int = 0
-    private var frameHeight: Int = 0
-
-    fun update(
-        config: OverlayConfig,
-        result: VisionResult?,
-        showCoordinateGrid: Boolean,
-        role: OverlayLayerRole,
-        runtimeStatus: RuntimeStatus? = null,
-    ) {
-        check(role == this.role)
-        val sizeMayChange = this.config.style != config.style ||
-            this.config.orientation != config.orientation ||
-            this.config.scale != config.scale ||
-            this.config.textScale != config.textScale ||
-            this.role == OverlayLayerRole.INTERACTIVE_HUD
-        if (role == OverlayLayerRole.PASS_THROUGH_BOXES) {
-            mergePersistedBoxes(config, result)
-        } else if (!config.persistBoxes || !config.showBoxes) {
-            persistedBoxes.clear()
-        }
-        val contentSignature = contentSignature(config, result, showCoordinateGrid)
-        val unchanged = !sizeMayChange && contentSignature == lastContentSignature
-        this.config = config
-        this.result = result
-        this.showCoordinateGrid = showCoordinateGrid
-        this.runtimeStatus = runtimeStatus
-        // 多点找色命中点：仅 DEBUG_HUD 且诊断开关开时绘制（默认空）。
-        val r = result
-        this.multicolorHitPoints = if (config.style == OverlayStyle.DEBUG_HUD && r != null) {
-            r.multicolorDiag
-                .filter { it.matched && it.baseX >= 0 && it.baseY >= 0 }
-                .map { it.baseX.toFloat() to it.baseY.toFloat() }
-        } else {
-            emptyList()
-        }
-        // 过滤虚线框 + 搜索区：仅 DEBUG_HUD + 诊断开关开时绘制（默认空）。
-        this.filteredOut = if (config.style == OverlayStyle.DEBUG_HUD && r != null) {
-            r.filteredOut
-        } else {
-            emptyList()
-        }
-        this.multicolorSearchRegions = if (config.style == OverlayStyle.DEBUG_HUD && r != null) {
-            r.multicolorDiag
-                .asSequence()
-                .map { NormalizedRect.fromUnchecked(it.searchLeft, it.searchTop, it.searchRight, it.searchBottom) }
-                .filterNotNull()
-                .toList()
-        } else {
-            emptyList()
-        }
-        this.frameWidth = r?.frameWidth ?: 0
-        this.frameHeight = r?.frameHeight ?: 0
-        if (sizeMayChange) requestLayout()
-        if (!unchanged) {
-            lastContentSignature = contentSignature
-            invalidate()
-        } else if (
-            role == OverlayLayerRole.PASS_THROUGH_BOXES &&
-            config.persistBoxes &&
-            config.showBoxes &&
-            persistedBoxes.isNotEmpty()
-        ) {
-            // 残留框随时间淡出：即使检测签名未变也要周期重绘。
-            val now = SystemClock.uptimeMillis()
-            if (now - lastPersistPruneAtMs >= PERSIST_REDRAW_INTERVAL_MS) {
-                lastPersistPruneAtMs = now
-                invalidate()
-            }
-        }
-    }
-
-    private fun mergePersistedBoxes(config: OverlayConfig, result: VisionResult?) {
-        if (!config.persistBoxes || !config.showBoxes) {
-            persistedBoxes.clear()
-            return
-        }
-        val now = SystemClock.uptimeMillis()
-        val live = result?.detections.orEmpty()
-            .asSequence()
-            .filter { config.showDiagnostics || !it.diagnosticOnly }
-            .toList()
-        val liveIds = live.mapTo(HashSet()) { it.id }
-        for (detection in live) {
-            persistedBoxes[detection.id] = PersistedBox(
-                detection = detection,
-                lastSeenUptimeMs = now,
-            )
-        }
-        val iter = persistedBoxes.entries.iterator()
-        while (iter.hasNext()) {
-            val entry = iter.next()
-            if (entry.key in liveIds) continue
-            if (now - entry.value.lastSeenUptimeMs > PERSIST_BOX_TTL_MS) {
-                iter.remove()
-            }
-        }
-        // 硬上限，避免长时间堆积。
-        while (persistedBoxes.size > MAX_PERSISTED_BOXES) {
-            val oldest = persistedBoxes.entries.minByOrNull { it.value.lastSeenUptimeMs }?.key
-            if (oldest == null) break
-            persistedBoxes.remove(oldest)
-        }
-    }
-
-    private fun contentSignature(
-        config: OverlayConfig,
-        result: VisionResult?,
-        showCoordinateGrid: Boolean,
-    ): Int {
-        var hash = role.hashCode()
-        hash = 31 * hash + config.style.hashCode()
-        hash = 31 * hash + config.theme.hashCode()
-        hash = 31 * hash + config.customColor
-        hash = 31 * hash + (config.backgroundAlpha * 1000f).toInt()
-        hash = 31 * hash + (config.strokeWidthDp * 100f).toInt()
-        hash = 31 * hash + (config.scale * 100f).toInt()
-        hash = 31 * hash + (config.textScale * 100f).toInt()
-        hash = 31 * hash + config.orientation.hashCode()
-        hash = 31 * hash + config.showBoxes.hashCode()
-        hash = 31 * hash + config.persistBoxes.hashCode()
-        hash = 31 * hash + config.showText.hashCode()
-        hash = 31 * hash + config.showConfidence.hashCode()
-        hash = 31 * hash + config.showFps.hashCode()
-        hash = 31 * hash + config.showDiagnostics.hashCode()
-        hash = 31 * hash + config.clickThrough.hashCode()
-        hash = 31 * hash + showCoordinateGrid.hashCode()
-        hash = 31 * hash + (result?.detections?.size ?: -1)
-        hash = 31 * hash + ((result?.sceneConfidence ?: -1f) * 1000f).toInt()
-        result?.detections?.forEach { detection ->
-            hash = 31 * hash + detection.kind.hashCode()
-            hash = 31 * hash + detection.id.hashCode()
-            hash = 31 * hash + (detection.bounds.left * 1000f).toInt()
-            hash = 31 * hash + (detection.bounds.top * 1000f).toInt()
-            hash = 31 * hash + (detection.bounds.right * 1000f).toInt()
-            hash = 31 * hash + (detection.bounds.bottom * 1000f).toInt()
-            hash = 31 * hash + (detection.confidence * 100f).toInt()
-            hash = 31 * hash + detection.actionable.hashCode()
-            hash = 31 * hash + detection.displayContour.size
-            detection.displayContour.forEach { point ->
-                hash = 31 * hash + (point.x * 2000f).toInt()
-                hash = 31 * hash + (point.y * 2000f).toInt()
-            }
-        }
-        // 诊断叠加层：否则检测框签名不变时过滤虚线/找色点不会刷新。
-        if (config.style == OverlayStyle.DEBUG_HUD && result != null) {
-            hash = 31 * hash + result.filteredOut.size
-            result.filteredOut.forEach { fo ->
-                hash = 31 * hash + fo.reason.hashCode()
-                hash = 31 * hash + (fo.detection.bounds.left * 1000f).toInt()
-                hash = 31 * hash + (fo.detection.bounds.top * 1000f).toInt()
-                hash = 31 * hash + (fo.detection.bounds.right * 1000f).toInt()
-                hash = 31 * hash + (fo.detection.bounds.bottom * 1000f).toInt()
-            }
-            hash = 31 * hash + result.multicolorDiag.size
-            result.multicolorDiag.forEach { m ->
-                hash = 31 * hash + m.patternIndex
-                hash = 31 * hash + m.matched.hashCode()
-                hash = 31 * hash + m.baseX
-                hash = 31 * hash + m.baseY
-                hash = 31 * hash + m.reason
-                hash = 31 * hash + (m.searchLeft * 1000f).toInt()
-                hash = 31 * hash + (m.searchTop * 1000f).toInt()
-                hash = 31 * hash + (m.searchRight * 1000f).toInt()
-                hash = 31 * hash + (m.searchBottom * 1000f).toInt()
-            }
-            hash = 31 * hash + (result.timing.totalNs / 100_000L).toInt()
-            hash = 31 * hash + (runtimeStatus?.lastAutomationDecision?.hashCode() ?: 0)
-        }
-        if (config.persistBoxes && role == OverlayLayerRole.PASS_THROUGH_BOXES) {
-            hash = 31 * hash + persistedBoxes.size
-            persistedBoxes.values.forEach { box ->
-                hash = 31 * hash + box.detection.id.hashCode()
-                hash = 31 * hash + (box.lastSeenUptimeMs / 100L).toInt()
-            }
-        }
-        hash = 31 * hash + (result?.error?.hashCode() ?: 0)
-        return hash
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        if (role == OverlayLayerRole.PASS_THROUGH_BOXES) {
-            setMeasuredDimension(
-                View.MeasureSpec.getSize(widthMeasureSpec),
-                View.MeasureSpec.getSize(heightMeasureSpec),
-            )
-            return
-        }
-        val scale = config.scale.coerceIn(0.6f, 2f)
-        val vertical = config.orientation == OverlayOrientation.VERTICAL
-        val desiredWidthDp = when (config.style) {
-            OverlayStyle.MINIMAL -> if (vertical) 76f else 106f
-            OverlayStyle.COMPACT -> if (vertical) 160f else 300f
-            OverlayStyle.DEBUG_HUD -> if (vertical) 220f else 360f
-        }
-        val desiredHeightDp = when (config.style) {
-            OverlayStyle.MINIMAL -> if (vertical) 76f else 54f
-            OverlayStyle.COMPACT -> if (vertical) 126f else 66f
-            OverlayStyle.DEBUG_HUD -> if (vertical) 180f else 92f
-        }
-        setMeasuredDimension(
-            resolveSize((desiredWidthDp * density * scale).toInt(), widthMeasureSpec),
-            resolveSize((desiredHeightDp * density * scale).toInt(), heightMeasureSpec),
-        )
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (role != OverlayLayerRole.INTERACTIVE_HUD || config.lockPosition) return false
-        return when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                lastRawX = event.rawX
-                lastRawY = event.rawY
-                true
-            }
-            MotionEvent.ACTION_MOVE -> {
-                val dx = (event.rawX - lastRawX).toInt()
-                val dy = (event.rawY - lastRawY).toInt()
-                lastRawX = event.rawX
-                lastRawY = event.rawY
-                onMove(dx, dy, false)
-                true
-            }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                onMove(0, 0, true)
-                performClick()
-                true
-            }
-            else -> true
-        }
-    }
-
-    override fun performClick(): Boolean {
-        super.performClick()
-        return true
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-        val current = result ?: return
-        val accent = accentColor(config)
-        val scale = config.scale.coerceIn(0.6f, 2f)
-        val strokeWidth = config.strokeWidthDp * density * scale
-        stroke.strokeWidth = strokeWidth
-        text.textSize = 12f * density * config.textScale * scale
-
-        when (role) {
-            OverlayLayerRole.PASS_THROUGH_BOXES -> {
-                if (showCoordinateGrid) {
-                    drawCoordinateGrid(canvas, accent, scale)
-                }
-                // 检测框始终画在穿透层：不挡触摸；clickThrough 仅保留为兼容配置项。
-                // persistBoxes 时合并短时残留框（仅 HUD，不参与规划）。
-                if (config.showBoxes) {
-                    current.player?.takeIf { config.style == OverlayStyle.DEBUG_HUD }?.let {
-                        drawDetection(canvas, it, Color.WHITE, strokeWidth, "玩家")
-                    }
-                    val now = SystemClock.uptimeMillis()
-                    val liveIds = current.detections
-                        .asSequence()
-                        .filter { config.showDiagnostics || !it.diagnosticOnly }
-                        .mapTo(HashSet()) { it.id }
-                    if (config.persistBoxes) {
-                        persistedBoxes.values
-                            .asSequence()
-                            .filter { it.detection.id !in liveIds }
-                            .forEach { box ->
-                                val age = now - box.lastSeenUptimeMs
-                                if (age > PERSIST_BOX_TTL_MS) return@forEach
-                                val fade = (1f - age.toFloat() / PERSIST_BOX_TTL_MS.toFloat())
-                                    .coerceIn(0.25f, 0.85f)
-                                val base = if (box.detection.actionable) {
-                                    accent
-                                } else {
-                                    withAlpha(accent, 145)
-                                }
-                                val faded = withAlpha(base, (fade * 180f).roundToInt().coerceIn(40, 180))
-                                drawDetection(
-                                    canvas,
-                                    box.detection,
-                                    faded,
-                                    strokeWidth,
-                                    detectionKindDisplayName(box.detection.kind.name),
-                                )
-                            }
-                    }
-                    current.detections
-                        .asSequence()
-                        .filter { config.showDiagnostics || !it.diagnosticOnly }
-                        .forEach { detection ->
-                            val color = if (detection.actionable) accent else withAlpha(accent, 145)
-                            drawDetection(
-                                canvas,
-                                detection,
-                                color,
-                                strokeWidth,
-                                detectionKindDisplayName(detection.kind.name),
-                            )
-                        }
-                    // 多点找色命中点：仅 DEBUG_HUD + 诊断开关开时绘制（默认空）。
-                    if (config.style == OverlayStyle.DEBUG_HUD && multicolorHitPoints.isNotEmpty()) {
-                        val hitRadius = (3f * density * scale).coerceAtLeast(2f)
-                        fill.color = withAlpha(Color.YELLOW, 200)
-                        for ((px, py) in multicolorHitPoints) {
-                            canvas.drawCircle(
-                                px / frameWidth.coerceAtLeast(1) * width,
-                                py / frameHeight.coerceAtLeast(1) * height,
-                                hitRadius, fill,
-                            )
-                        }
-                    }
-                    // 过滤虚线框：仅 DEBUG_HUD + 诊断开关开时绘制（默认空）。
-                    if (config.style == OverlayStyle.DEBUG_HUD && filteredOut.isNotEmpty()) {
-                        val dash = DashPathEffect(floatArrayOf(6f * density, 4f * density), 0f)
-                        stroke.color = withAlpha(Color.YELLOW, 160)
-                        stroke.strokeWidth = strokeWidth
-                        stroke.pathEffect = dash
-                        filteredOut.forEach { fo ->
-                            val b = fo.detection.bounds
-                            canvas.drawRect(
-                                b.left * width, b.top * height,
-                                b.right * width, b.bottom * height,
-                                stroke,
-                            )
-                        }
-                        stroke.pathEffect = null
-                    }
-                    // 搜索区矩形（仅 DEBUG_HUD + 诊断开关开时绘制；默认空）。
-                    if (config.style == OverlayStyle.DEBUG_HUD && multicolorSearchRegions.isNotEmpty()) {
-                        val regionDash = DashPathEffect(floatArrayOf(4f * density, 3f * density), 0f)
-                        stroke.color = withAlpha(Color.MAGENTA, 140)
-                        stroke.strokeWidth = (1.5f * density * scale).coerceAtLeast(1f)
-                        stroke.pathEffect = regionDash
-                        multicolorSearchRegions.forEach { region ->
-                            canvas.drawRect(
-                                region.left * width, region.top * height,
-                                region.right * width, region.bottom * height,
-                                stroke,
-                            )
-                        }
-                        stroke.pathEffect = null
-                    }
-                }
-            }
-            OverlayLayerRole.INTERACTIVE_HUD -> when (config.style) {
-                OverlayStyle.MINIMAL -> drawMinimalHud(canvas, current, accent, scale)
-                OverlayStyle.COMPACT -> drawCompactHud(canvas, current, accent, scale)
-                OverlayStyle.DEBUG_HUD -> drawDebugHud(canvas, current, accent, scale)
-            }
-        }
-    }
-
-    private fun drawCoordinateGrid(canvas: Canvas, accent: Int, scale: Float) {
-        stroke.color = withAlpha(accent, 100)
-        stroke.strokeWidth = (1f * density * scale).coerceAtLeast(1f)
-        for (step in 1 until 10) {
-            val ratio = step / 10f
-            val x = width * ratio
-            val y = height * ratio
-            canvas.drawLine(x, 0f, x, height.toFloat(), stroke)
-            canvas.drawLine(0f, y, width.toFloat(), y, stroke)
-        }
-        if (config.showText) {
-            text.color = withAlpha(readableTextColor(), 180)
-            text.textSize = 10f * density * config.textScale * scale
-            for (step in 1 until 10) {
-                val ratio = step / 10f
-                canvas.drawText("%.1f".format(ratio), width * ratio + 2f, text.textSize, text)
-                canvas.drawText("%.1f".format(ratio), 2f, height * ratio - 2f, text)
-            }
-        }
-    }
-
-    private fun drawMinimalHud(canvas: Canvas, result: VisionResult, accent: Int, scale: Float) {
-        val padding = 8f * density * scale
-        val left = 8f * density * scale
-        val top = 8f * density * scale
-        val height = 28f * density * scale
-        val radius = 7f * density * scale
-        val label = "障碍 ${result.detections.size}"
-        text.textSize = 12f * density * config.textScale * scale
-        val width = if (config.showText) {
-            text.measureText(label) + radius * 3.2f + padding * 2f
-        } else {
-            radius * 3.2f + padding * 2f
-        }
-        fill.color = panelColor(config)
-        canvas.drawRoundRect(left, top, left + width, top + height, 14f * density, 14f * density, fill)
-        fill.color = accent
-        canvas.drawCircle(left + padding + radius, top + height / 2f, radius, fill)
-        if (config.showText) {
-            text.color = readableTextColor()
-            canvas.drawText(
-                label,
-                left + padding + radius * 2.4f,
-                top + height / 2f + text.textSize * 0.35f,
-                text,
-            )
-        }
-    }
-
-    private fun drawCompactHud(canvas: Canvas, result: VisionResult, accent: Int, scale: Float) {
-        val scene = result.scene.displayName()
-        val parts = mutableListOf(scene, "障碍 ${result.detections.size}")
-        if (config.showConfidence) parts += "置信度 ${(result.sceneConfidence * 100f).toInt()}%"
-        if (config.showFps && result.processingNanos > 0) {
-            val nativeFps = (1_000_000_000.0 / result.processingNanos).coerceAtMost(999.0)
-            parts += "识别 ${"%.0f".format(nativeFps)} fps"
-        }
-        drawHudPanel(canvas, oriented(parts), accent, scale)
-    }
-
-    private fun drawDebugHud(canvas: Canvas, result: VisionResult, accent: Int, scale: Float) {
-        val parts = mutableListOf(
-            result.scene.displayName(),
-            "障碍 ${result.detections.size}",
-            "置信度 ${(result.sceneConfidence * 100f).toInt()}%",
-            "耗时 ${"%.2f".format(result.processingNanos / 1_000_000.0)} ms",
-        )
-        result.error?.takeIf(String::isNotBlank)?.let { parts += "错误 ${it.take(48)}" }
-        val status = runtimeStatus
-        if (status != null && status.running) {
-            val decision = status.lastAutomationDecision
-            if (!decision.isNullOrBlank()) {
-                parts += humanizeAutomationDecision(decision)
-            }
-        }
-        // 阶段耗时细分（仅 enableStageTiming 开时 timing.totalNs>0）。
-        val timing = result.timing
-        if (timing.totalNs > 0) {
-            parts += "阶段 jni=${"%.1f".format(timing.jniPrepNs / 1_000_000f)}" +
-                " det=${"%.1f".format(timing.detectNs / 1_000_000f)}" +
-                " post=${"%.1f".format(timing.postfilterNs / 1_000_000f)}" +
-                " fin=${"%.1f".format(timing.finalizeNs / 1_000_000f)} ms"
-        }
-        // 多点找色命中数（仅 enableMulticolorDiagnostic 开时非空）。
-        if (result.multicolorDiag.isNotEmpty()) {
-            val mcMatched = result.multicolorDiag.count { it.matched }
-            parts += "找色 $mcMatched/${result.multicolorDiag.size}"
-        }
-        // 过滤剔除数（仅 enableFilterTrace 开时非空）。
-        if (result.filteredOut.isNotEmpty()) {
-            parts += "过滤 ${result.filteredOut.size}"
-        }
-        drawHudPanel(canvas, oriented(parts), accent, scale)
-    }
-
-    private fun oriented(parts: List<String>): List<String> =
-        if (config.orientation == OverlayOrientation.VERTICAL) parts else listOf(parts.joinToString("  "))
-
-    private fun drawHudPanel(canvas: Canvas, lines: List<String>, accent: Int, scale: Float) {
-        if (!config.showText || lines.isEmpty()) return
-        val padding = 10f * density * scale
-        val left = 10f * density * scale
-        val top = 10f * density * scale
-        val lineGap = 5f * density * scale
-        text.textSize = 12f * density * config.textScale * scale
-        val width = lines.maxOf { line -> text.measureText(line) } + padding * 2f + 6f * density
-        val height = lines.size * text.textSize + (lines.size - 1) * lineGap + padding * 2f
-        fill.color = panelColor(config)
-        canvas.drawRoundRect(left, top, left + width, top + height, 14f * density, 14f * density, fill)
-        fill.color = accent
-        canvas.drawRoundRect(
-            left,
-            top + 4f * density,
-            left + 4f * density,
-            top + height - 4f * density,
-            4f * density,
-            4f * density,
-            fill,
-        )
-        text.color = readableTextColor()
-        lines.forEachIndexed { index, line ->
-            val baseline = top + padding + text.textSize + index * (text.textSize + lineGap)
-            canvas.drawText(line, left + padding + 4f * density, baseline, text)
-        }
-    }
-
-    /** 将视口归一化边界映射到当前 View 像素并描边。 */
-    private fun drawDetection(
-        canvas: Canvas,
-        detection: Detection,
-        color: Int,
-        strokeWidth: Float,
-        label: String,
-    ) {
-        val bounds = detection.bounds
-        val left = bounds.left * width
-        val top = bounds.top * height
-        val right = bounds.right * width
-        val bottom = bounds.bottom * height
-        if (detection.displayContour.size >= 3) {
-            drawDisplayContour(canvas, detection, color, strokeWidth)
-        } else {
-            stroke.color = color
-            stroke.strokeWidth = strokeWidth
-            canvas.drawRect(left, top, right, bottom, stroke)
-        }
-        if (config.showConfidence || config.style == OverlayStyle.DEBUG_HUD) {
-            val caption = "$label ${(detection.confidence * 100f).toInt()}%"
-            val baseline = (top - 4f * density).coerceAtLeast(text.textSize)
-            text.color = color
-            canvas.drawText(caption, left, baseline, text)
-        }
-    }
+    /** 悬浮窗挂载结果；[blockReason] 仅在期望显示但失败时非空。 */
+    data class OverlayShowResult(
+        val visible: Boolean,
+        val blockReason: OverlayBlockReason?,
+    )
 
     /**
-     * 用归一化点生成封闭 Path。所有填充与描边都 clip 在 Path 内，
-     * 因此 Canvas 居中描边不会向障碍轮廓外溢。
+     * 状态 HUD 视图：只画文本行，不画任何检测框。
+     *
+     * 触摸用于拖动（clickThrough 时窗口不接收触摸，走不到这里）。
      */
-    private fun drawDisplayContour(
-        canvas: Canvas,
-        detection: Detection,
-        color: Int,
-        strokeWidth: Float,
-    ) {
-        val points = detection.displayContour
-        if (points.size < 3) return
-        contourPath.reset()
-        contourPath.moveTo(points.first().x * width, points.first().y * height)
-        for (index in 1 until points.size) {
-            val point = points[index]
-            contourPath.lineTo(point.x * width, point.y * height)
+    private class StatusOverlayView(
+        context: Context,
+        private val onMove: (deltaX: Int, deltaY: Int, released: Boolean) -> Unit,
+    ) : View(context) {
+        private val density = resources.displayMetrics.density
+        private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 12f * density
         }
-        contourPath.close()
-
-        val checkpoint = canvas.save()
-        try {
-            canvas.clipPath(contourPath)
-            fill.color = withAlpha(color, 34)
-            canvas.drawPath(contourPath, fill)
-
-            stroke.color = Color.argb(210, 7, 12, 18)
-            stroke.strokeWidth = (strokeWidth * 2.4f).coerceAtLeast(2f)
-            canvas.drawPath(contourPath, stroke)
-
-            stroke.color = color
-            stroke.strokeWidth = strokeWidth.coerceAtLeast(1f)
-            canvas.drawPath(contourPath, stroke)
-        } finally {
-            canvas.restoreToCount(checkpoint)
+        private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(178, 16, 20, 24)
         }
-    }
-
-    private fun panelColor(config: OverlayConfig): Int {
-        val alpha = (config.backgroundAlpha * 255f).toInt().coerceIn(0, 255)
-        return when (config.theme) {
-            OverlayTheme.LIGHT_GLASS -> Color.argb(alpha, 245, 245, 248)
-            OverlayTheme.AMOLED -> Color.argb(alpha, 0, 0, 0)
-            else -> Color.argb(alpha, 10, 10, 14)
+        private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(220, 32, 232, 155)
         }
-    }
+        private val padding = (8f * density).roundToInt()
+        private var lines: List<String> = emptyList()
+        private var lastDownX = 0f
+        private var lastDownY = 0f
 
-    private fun readableTextColor(): Int =
-        if (config.theme == OverlayTheme.LIGHT_GLASS) Color.BLACK else Color.WHITE
+        fun update(config: OverlayConfig, status: RuntimeStatus?) {
+            textPaint.textSize = 12f * density * config.textScale.coerceIn(0.75f, 2f)
+            backgroundPaint.alpha = (config.backgroundAlpha.coerceIn(0.1f, 1f) * 255).roundToInt()
+                .coerceIn(0, 255)
+            accentPaint.color = accentColor(config)
+            lines = buildLines(config, status)
+            requestLayout()
+            invalidate()
+        }
 
-    private fun accentColor(config: OverlayConfig): Int = when (config.theme) {
-        OverlayTheme.NEON_GREEN -> Color.rgb(32, 232, 155)
-        OverlayTheme.WARNING_ORANGE -> Color.rgb(255, 159, 28)
-        OverlayTheme.FIRE_ORANGE -> Color.rgb(255, 107, 44)
-        OverlayTheme.BAMBOO -> Color.rgb(42, 176, 120)
-        OverlayTheme.CUSTOM -> config.customColor
-        OverlayTheme.LIGHT_GLASS -> Color.rgb(25, 90, 170)
-        OverlayTheme.AMOLED, OverlayTheme.DARK_GLASS -> Color.rgb(150, 220, 255)
-        OverlayTheme.FOLLOW_APP, OverlayTheme.AUTO_CONTRAST -> Color.WHITE
-    }
+        private fun buildLines(config: OverlayConfig, status: RuntimeStatus?): List<String> {
+            val out = mutableListOf<String>()
+            out += "HZZS Clean Base"
+            if (status == null) return out
+            out += if (status.running) "运行中 · ${if (status.captureReady) "截图就绪" else "等待截图"}" else "已停止"
+            out += "截图：${status.activeBackend.displayName()}"
+            out += "手势：${status.activeGestureBackend.displayName()}"
+            if (config.showFps) out += "FPS：%.1f".format(status.fps)
+            status.overlayBlockReason?.let { out += "悬浮窗：${it.name}" }
+            status.lastError?.let { out += "错误：$it" }
+            out += "真实动作：禁用"
+            return out
+        }
 
-    private fun withAlpha(color: Int, alpha: Int): Int = Color.argb(
-        alpha.coerceIn(0, 255),
-        Color.red(color),
-        Color.green(color),
-        Color.blue(color),
-    )
+        private fun accentColor(config: OverlayConfig): Int = when (config.theme) {
+            OverlayTheme.CUSTOM -> config.customColor
+            OverlayTheme.DARK_GLASS -> Color.rgb(0xE0, 0xE0, 0xE0)
+            OverlayTheme.LIGHT_GLASS -> Color.rgb(0x20, 0x20, 0x20)
+            OverlayTheme.AMOLED -> Color.WHITE
+            else -> Color.argb(220, 32, 232, 155)
+        }
 
-    private data class PersistedBox(
-        val detection: Detection,
-        val lastSeenUptimeMs: Long,
-    )
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val textWidth = lines.maxOfOrNull { textPaint.measureText(it) } ?: 0f
+            val lineHeight = textPaint.textSize * 1.35f
+            val desiredWidth = (textWidth + padding * 3).roundToInt()
+            val desiredHeight = (lineHeight * lines.size + padding * 2).roundToInt()
+            setMeasuredDimension(
+                resolveSize(desiredWidth, widthMeasureSpec),
+                resolveSize(desiredHeight, heightMeasureSpec),
+            )
+        }
 
-    private companion object {
-        /** 丢检后仍绘制的最长时间（毫秒）。 */
-        const val PERSIST_BOX_TTL_MS = 700L
-        /** 残留框淡出时的最小重绘间隔，避免每帧无意义 invalidate。 */
-        const val PERSIST_REDRAW_INTERVAL_MS = 90L
-        const val MAX_PERSISTED_BOXES = 24
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val radius = 10f * density
+            canvas.drawRoundRect(
+                0f,
+                0f,
+                width.toFloat(),
+                height.toFloat(),
+                radius,
+                radius,
+                backgroundPaint,
+            )
+            val lineHeight = textPaint.textSize * 1.35f
+            val textColor = readableTextColor()
+            var y = padding + textPaint.textSize
+            lines.forEachIndexed { index, line ->
+                textPaint.color = if (index == 0) accentPaint.color else textColor
+                canvas.drawText(line, padding * 1.5f, y, textPaint)
+                y += lineHeight
+            }
+        }
+
+        private fun readableTextColor(): Int =
+            if (backgroundPaint.alpha > 128) Color.WHITE else Color.BLACK
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastDownX = event.rawX
+                    lastDownY = event.rawY
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - lastDownX).roundToInt()
+                    val dy = (event.rawY - lastDownY).roundToInt()
+                    lastDownX = event.rawX
+                    lastDownY = event.rawY
+                    if (dx != 0 || dy != 0) onMove(dx, dy, false)
+                    return true
+                }
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
+                    onMove(0, 0, true)
+                    return true
+                }
+            }
+            return super.onTouchEvent(event)
+        }
     }
 }

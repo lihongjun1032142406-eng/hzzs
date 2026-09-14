@@ -4,12 +4,13 @@
  * 职责：定义设置子页路由/标题/图标/分组，以及根据配置生成首页一行摘要。
  * 边界：纯 UI 模型，不读写仓库、不触发预览或权限能力。
  * 标题/说明使用 string 资源 ID；[summary] 为纯函数便于 JVM 单测。
+ *
+ * Clean Base：算法包 / 识别阈值 / 赛季障碍等 HZZS 原游戏视觉算法分类已清退。
  */
 package top.azek431.hzzs.feature.settings.model
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.ColorLens
@@ -17,10 +18,8 @@ import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.SmartToy
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.ui.graphics.vector.ImageVector
 import top.azek431.hzzs.R
-import top.azek431.hzzs.core.algorithm.AlgorithmCatalogState
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.displayName
 
@@ -59,7 +58,7 @@ enum class SettingsCategory(
         descriptionRes = R.string.settings_cat_overlay_desc,
         icon = Icons.Rounded.Layers,
         group = SettingsGroup.DISPLAY,
-        searchHints = "hud 悬浮 框 透明度",
+        searchHints = "hud 悬浮 透明度",
     ),
     CAPTURE(
         route = "capture",
@@ -69,29 +68,13 @@ enum class SettingsCategory(
         group = SettingsGroup.CAPTURE_VISION,
         searchHints = "截图 录屏 root shizuku 无障碍 media",
     ),
-    ALGORITHM(
-        route = "algorithm",
-        titleRes = R.string.settings_cat_algorithm_title,
-        descriptionRes = R.string.settings_cat_algorithm_desc,
-        icon = Icons.Rounded.AutoAwesome,
-        group = SettingsGroup.CAPTURE_VISION,
-        searchHints = "算法 包 切换 酱油 捆绑 algorithm library",
-    ),
-    DETECTION(
-        route = "detection",
-        titleRes = R.string.settings_cat_detection_title,
-        descriptionRes = R.string.settings_cat_detection_desc,
-        icon = Icons.Rounded.Tune,
-        group = SettingsGroup.CAPTURE_VISION,
-        searchHints = "检测 赛季 阈值 障碍 置信度 稳定帧 workWidth",
-    ),
     AUTOMATION(
         route = "automation",
         titleRes = R.string.settings_cat_automation_title,
         descriptionRes = R.string.settings_cat_automation_desc,
         icon = Icons.Rounded.Security,
         group = SettingsGroup.SAFETY,
-        searchHints = "自动 手势 风险 免责 触发距离 节流",
+        searchHints = "自动 手势 风险 免责 节流 包名",
     ),
     NETWORK(
         route = "network",
@@ -115,32 +98,19 @@ enum class SettingsCategory(
         descriptionRes = R.string.settings_cat_developer_desc,
         icon = Icons.Rounded.BugReport,
         group = SettingsGroup.ADVANCED,
-        searchHints = "调试 日志 benchmark 诊断",
+        searchHints = "调试 日志 诊断",
     ),
 }
 
 /**
- * 根据当前配置与算法目录状态生成分类卡摘要文案。
+ * 根据当前配置生成分类卡摘要文案。
  * 动态拼接，保持纯函数以便 JVM 单测；静态壳文案见 strings.xml。
  */
-fun SettingsCategory.summary(
-    config: AppConfig,
-    algorithmState: AlgorithmCatalogState? = null,
-): String = when (this) {
+fun SettingsCategory.summary(config: AppConfig): String = when (this) {
     SettingsCategory.APPEARANCE -> {
         val mode = config.theme.mode.displayName()
         val preset = config.theme.preset.displayName()
         "$mode · $preset"
-    }
-    SettingsCategory.ALGORITHM -> {
-        val mode = config.algorithm.selectionMode.displayName()
-        val name = algorithmState?.active?.name?.take(18) ?: "内置算法"
-        "$mode · $name"
-    }
-    SettingsCategory.DETECTION -> {
-        val scene = config.selectedScene.displayName()
-        val conf = "%.0f%%".format(config.scenes.getValue(config.selectedScene).thresholds.minimumConfidence * 100)
-        "$scene · 置信度 $conf"
     }
     SettingsCategory.CAPTURE -> config.captureBackend.displayName()
     SettingsCategory.OVERLAY -> {
@@ -196,8 +166,6 @@ object SettingsRoutes {
     const val HOME = "settings_home"
     /** 开发者运行日志查看器（从开发者页进入）。 */
     const val LOG_VIEWER = "log_viewer"
-    /** 算法执行流程可视化（从开发者页进入）。 */
-    const val ALGORITHM_PIPELINE = "algorithm_pipeline"
     /** MCP 访问日志全屏查看器（从 MCP 页进入）。 */
     const val MCP_ACCESS_LOG = "mcp_access_log"
 }

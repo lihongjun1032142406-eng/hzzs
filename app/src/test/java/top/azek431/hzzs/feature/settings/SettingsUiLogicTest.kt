@@ -4,17 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import top.azek431.hzzs.core.algorithm.AlgorithmCardStatus
-import top.azek431.hzzs.core.algorithm.AlgorithmDownloadSource
-import top.azek431.hzzs.core.algorithm.AlgorithmOrigin
-import top.azek431.hzzs.core.algorithm.AlgorithmPackageInfo
-import top.azek431.hzzs.core.algorithm.label
-import top.azek431.hzzs.core.model.AlgorithmChannel
-import top.azek431.hzzs.core.model.AlgorithmConfig
-import top.azek431.hzzs.core.model.AlgorithmSelectionMode
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.AppThemeMode
-import top.azek431.hzzs.core.model.SceneId
 import top.azek431.hzzs.core.model.UpdateSourcePreference
 import top.azek431.hzzs.core.model.displayName
 import top.azek431.hzzs.core.preferences.ConfigJson
@@ -24,63 +15,61 @@ import top.azek431.hzzs.feature.settings.model.summary
 
 class SettingsUiLogicTest {
     @Test
-    fun algorithmDefaultsToAutoSelection() {
+    fun defaultConfigIsCleanBaseSafe() {
         val defaults = AppConfig()
-        assertEquals(AlgorithmSelectionMode.AUTO, defaults.algorithm.selectionMode)
-        assertEquals(AlgorithmChannel.STABLE, defaults.algorithm.channel)
-        assertFalse(defaults.algorithm.autoDownload)
+        assertTrue(AppConfig.JINCHAN_CLEAN_BASE)
+        assertFalse(AppConfig.ACTION_ENABLED)
+        assertFalse(AppConfig.OVERLAY_DEFAULT_ENABLED)
+        assertFalse(defaults.overlay.enabled)
+        assertFalse(defaults.automation.enabled)
+        assertFalse(defaults.mcp.enabled)
         assertEquals(UpdateSourcePreference.AUTO, defaults.update.sourcePreference)
     }
 
     @Test
-    fun configJsonRoundTripKeepsAlgorithmAndSourcePreference() {
+    fun configJsonRoundTripKeepsThemeOverlayAndSourcePreference() {
         val original = AppConfig(
-            algorithm = AlgorithmConfig(
-                selectionMode = AlgorithmSelectionMode.MANUAL,
-                pinnedAlgorithmId = "builtin-hzzs-base-0.1.0",
-                channel = AlgorithmChannel.BETA,
-                autoCheck = false,
-                autoDownload = true,
-            ),
+            theme = AppConfig().theme.copy(mode = AppThemeMode.AMOLED),
+            overlay = AppConfig().overlay.copy(enabled = true),
             update = AppConfig().update.copy(
                 sourcePreference = UpdateSourcePreference.PREFER_GITHUB,
             ),
         )
         val decoded = ConfigJson.decode(ConfigJson.encode(original))
-        assertEquals(AlgorithmSelectionMode.MANUAL, decoded.algorithm.selectionMode)
-        assertEquals("builtin-hzzs-base-0.1.0", decoded.algorithm.pinnedAlgorithmId)
-        assertEquals(AlgorithmChannel.BETA, decoded.algorithm.channel)
-        assertTrue(decoded.algorithm.autoDownload)
+        assertEquals(AppThemeMode.AMOLED, decoded.theme.mode)
+        assertTrue(decoded.overlay.enabled)
         assertEquals(UpdateSourcePreference.PREFER_GITHUB, decoded.update.sourcePreference)
         assertEquals(AppConfig.CURRENT_SCHEMA, decoded.schemaVersion)
     }
 
     @Test
-    fun legacySchemaWithoutAlgorithmStillDecodes() {
+    fun legacySchemaWithRemovedFieldsStillDecodes() {
         val legacy = """
             {
               "schemaVersion": 5,
               "selectedScene": "BAMBOO_BOOKSTORE",
+              "scenes": [{"sceneId": "SWEET_FACTORY", "enabled": true}],
+              "algorithm": {"selectionMode": "MANUAL", "channel": "BETA"},
               "update": { "channel": "STABLE", "autoCheck": true, "wifiOnly": true }
             }
         """.trimIndent()
         val decoded = ConfigJson.decode(legacy)
-        assertEquals(AlgorithmSelectionMode.AUTO, decoded.algorithm.selectionMode)
         assertEquals(UpdateSourcePreference.AUTO, decoded.update.sourcePreference)
+        assertFalse(decoded.overlay.enabled)
+        assertFalse(decoded.automation.enabled)
     }
 
     @Test
     fun categorySummariesAreShortAndStable() {
         val config = AppConfig(
             theme = AppConfig().theme.copy(mode = AppThemeMode.AMOLED),
-            algorithm = AlgorithmConfig(selectionMode = AlgorithmSelectionMode.AUTO),
         )
         val appearance = SettingsCategory.APPEARANCE.summary(config)
         val network = SettingsCategory.NETWORK.summary(config)
         assertTrue(appearance.contains("纯黑"))
         assertTrue(network.contains("自动选择") || network.contains("应用"))
         assertTrue(SettingsCategory.AUTOMATION.summary(config).contains("关闭"))
-        assertTrue(SettingsCategory.DETECTION.summary(config).contains("置信度"))
+        assertTrue(SettingsCategory.OVERLAY.summary(config).contains("关闭"))
         assertEquals("未开启", SettingsCategory.DEVELOPER.summary(config))
         assertEquals(
             "已开启",
@@ -99,11 +88,8 @@ class SettingsUiLogicTest {
             SettingsCategory.entries.indexOf(SettingsCategory.CAPTURE) <
                 SettingsCategory.entries.indexOf(SettingsCategory.MCP),
         )
-        assertTrue(
-            SettingsCategory.entries.indexOf(SettingsCategory.ALGORITHM) <
-                SettingsCategory.entries.indexOf(SettingsCategory.DETECTION),
-        )
-        assertTrue(ordered.contains("DETECTION"))
+        assertFalse(ordered.contains("ALGORITHM"))
+        assertFalse(ordered.contains("DETECTION"))
     }
 
     @Test
@@ -139,53 +125,9 @@ class SettingsUiLogicTest {
     }
 
     @Test
-    fun remoteAlgorithmsSortCompatibleFirstThenVersion() {
-        val a = sample(id = "old", version = 100, compatible = true, published = 1)
-        val b = sample(id = "new", version = 200, compatible = true, published = 2)
-        val c = sample(id = "bad", version = 300, compatible = false, published = 3)
-        val sorted = listOf(a, b, c).sortedWith(
-            compareByDescending<AlgorithmPackageInfo> { it.isCompatible }
-                .thenByDescending { it.versionCode }
-                .thenByDescending { it.publishedAtEpochMs },
-        )
-        assertEquals(listOf("new", "old", "bad"), sorted.map { it.id })
-    }
-
-    @Test
-    fun statusLabelsStayShort() {
-        assertEquals("当前", AlgorithmCardStatus.CURRENT.label())
-        assertEquals("可更新", AlgorithmCardStatus.UPDATABLE.label())
-        assertEquals("待启用", AlgorithmCardStatus.PENDING_ACTIVATION.label())
-        assertEquals("不兼容", AlgorithmCardStatus.INCOMPATIBLE.label())
-        assertEquals("应用捆绑", AlgorithmOrigin.BUNDLED.label())
-        assertEquals("内置引擎", AlgorithmDownloadSource.BUILTIN.label())
-    }
-
-    @Test
-    fun selectionModeDisplayNames() {
-        assertEquals("自动选择", AlgorithmSelectionMode.AUTO.displayName())
-        assertEquals("手动选择", AlgorithmSelectionMode.MANUAL.displayName())
+    fun sourcePreferenceDisplayNames() {
         assertEquals("优先 Gitee", UpdateSourcePreference.PREFER_GITEE.displayName())
+        assertEquals("优先 GitHub", UpdateSourcePreference.PREFER_GITHUB.displayName())
+        assertEquals("自动选择", UpdateSourcePreference.AUTO.displayName())
     }
-
-    private fun sample(
-        id: String,
-        version: Long,
-        compatible: Boolean,
-        published: Long,
-    ) = AlgorithmPackageInfo(
-        id = id,
-        name = id,
-        versionName = version.toString(),
-        versionCode = version,
-        channel = AlgorithmChannel.STABLE,
-        summary = "s",
-        supportedScenes = setOf(SceneId.BAMBOO_BOOKSTORE),
-        minAppVersionCode = 1,
-        publishedAtEpochMs = published,
-        sizeBytes = 1,
-        origin = AlgorithmOrigin.REMOTE,
-        downloadSource = AlgorithmDownloadSource.GITEE,
-        isCompatible = compatible,
-    )
 }

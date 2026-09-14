@@ -2,18 +2,21 @@ package top.azek431.hzzs.mcp.executor
 
 import org.json.JSONArray
 import org.json.JSONObject
+import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.data.vision.VisionRuntimeController
-import top.azek431.hzzs.domain.vision.VisionResult
 import top.azek431.hzzs.mcp.ok
 import top.azek431.hzzs.mcp.toJson
-
 import javax.inject.Inject
 
 /**
- * 运行时控制执行器：视觉启停 / 状态 / 指标 / 诊断。
+ * 运行时控制执行器：截图运行时启停 / 状态 / 指标 / 诊断。
  *
- * 纯数据面（[top.azek431.hzzs.data.vision.VisionRuntimeController] 是视觉运行时唯一所有者，帧循环由其协调），
- * 不直接持有 SettingsRepository 写设置。
+ * 纯数据面（[top.azek431.hzzs.data.vision.VisionRuntimeController] 是截图运行时唯一所有者，
+ * 帧循环由其协调），不直接持有 SettingsRepository 写设置。
+ *
+ * Clean Base：不存在识别算法与自动操作，因此
+ * - 不返回任何检测结果；
+ * - [AppConfig.ACTION_ENABLED] 恒为 false，`cancel_actions` 为空操作。
  */
 class RuntimeControlExecutor @Inject constructor(
     private val runtime: VisionRuntimeController,
@@ -34,27 +37,31 @@ class RuntimeControlExecutor @Inject constructor(
     override suspend fun execute(tool: String, arguments: JSONObject): JSONObject = when (tool) {
         "start_analysis" -> {
             runtime.start()
-            ok("已请求启动分析")
+            ok("已请求启动截图运行时")
         }
         "stop_analysis" -> {
             runtime.stop()
-            ok("分析已停止")
+            ok("截图运行时已停止")
         }
         "restart_analysis" -> {
             runtime.stop()
             runtime.start()
-            ok("已请求重启分析")
+            ok("已请求重启截图运行时")
         }
         "cancel_actions" -> {
             runtime.cancelPendingActions()
-            ok("已取消在飞自动操作")
+            ok("Clean Base 无真实动作可取消（ACTION_ENABLED=false）")
         }
         "get_status" -> runtime.status.value.toJson()
         "get_runtime_snapshot" -> runtimeSnapshot()
         "get_metrics" -> metricsJson()
         "run_diagnostics" -> JSONObject().apply {
             put("status", runtime.status.value.toJson())
-            put("nativeLoaded", top.azek431.hzzs.nativevision.NativeVision.isAvailable)
+            put("cleanBase", AppConfig.JINCHAN_CLEAN_BASE)
+            put("actionEnabled", AppConfig.ACTION_ENABLED)
+            put("builtinVision", false)
+            put("builtinTracker", false)
+            put("algorithmPackRuntime", false)
             put("debugFrameCount", 0)
         }
         else -> throw IllegalArgumentException("未知工具：$tool")
@@ -77,70 +84,23 @@ class RuntimeControlExecutor @Inject constructor(
                 "frame",
                 JSONObject()
                     .put("fps", status.fps.toDouble())
-                    .put("processingMs", status.processingMs.toDouble())
-                    .put("obstacleCount", status.obstacleCount)
-                    .put("last30Fps", JSONArray().put(status.fps.toDouble()))
-                    .put("last30ProcessingMs", JSONArray().put(status.processingMs.toDouble())),
+                    .put("last30Fps", JSONArray().put(status.fps.toDouble())),
             )
             put("uptimeMs", uptime.coerceAtLeast(0L))
             put("processStartedElapsedRealtimeMs", processStartedElapsedRealtimeMs)
         }
     }
 
-    private suspend fun runtimeSnapshot(): JSONObject {
+    private fun runtimeSnapshot(): JSONObject {
         val status = runtime.status.value
-        val latest = runtime.latestResult.value
         return JSONObject().apply {
             put("status", status.toJson())
-            put("latest", latest?.toJson() ?: JSONObject.NULL)
-            put(
-                "latestSummary",
-                latest?.let { r ->
-                    JSONObject().apply {
-                        put("scene", r.scene.name)
-                        put("sceneConfidence", r.sceneConfidence.toDouble())
-                        put("detectionCount", r.detections.size)
-                        put(
-                            "kindHistogram",
-                            JSONObject().apply {
-                                r.detections.groupingBy { it.kind.name }.eachCount().forEach { (k, v) ->
-                                    put(k, v)
-                                }
-                            },
-                        )
-                        put(
-                            "hasPlayer",
-                            r.detections.any {
-                                it.kind == top.azek431.hzzs.domain.vision.ObjectKind.PLAYER
-                            },
-                        )
-                    }
-                } ?: JSONObject.NULL,
-            )
-            put("selectedScene", status.activeScene.name)
+            put("cleanBase", AppConfig.JINCHAN_CLEAN_BASE)
+            put("actionEnabled", AppConfig.ACTION_ENABLED)
+            put("latest", JSONObject.NULL)
             put("captureBackend", status.activeBackend.name)
             put("overlayVisible", status.overlayVisible)
             put("activeGestureBackend", status.activeGestureBackend.name)
         }
     }
-}
-
-internal fun VisionResult.toJson(): JSONObject = JSONObject().apply {
-    put("scene", scene.name)
-    put("sceneConfidence", sceneConfidence.toDouble())
-    put("processingNanos", processingNanos)
-    put("detections", JSONArray(detections.map { detectionToJson(it) }))
-}
-
-private fun detectionToJson(d: top.azek431.hzzs.domain.vision.Detection): JSONObject = JSONObject().apply {
-    put("kind", d.kind.name)
-    put("confidence", d.confidence.toDouble())
-    put("bounds", JSONObject().apply {
-        put("left", d.bounds.left.toDouble())
-        put("top", d.bounds.top.toDouble())
-        put("right", d.bounds.right.toDouble())
-        put("bottom", d.bounds.bottom.toDouble())
-    })
-    put("actionable", d.actionable)
-    put("avoidance", d.avoidance.name)
 }

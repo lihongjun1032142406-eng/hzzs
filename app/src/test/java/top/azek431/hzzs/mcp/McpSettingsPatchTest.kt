@@ -7,19 +7,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.AppThemeMode
-import top.azek431.hzzs.core.model.ObstacleKind
 import top.azek431.hzzs.core.model.OverlayStyle
-import top.azek431.hzzs.core.model.SceneId
 import top.azek431.hzzs.core.model.ThemePreset
 
 class McpSettingsPatchTest {
     @Test
-    fun appliesThemeAndScenePatches() {
+    fun appliesThemeAndOverlayPatches() {
         val base = AppConfig()
         val next = McpSettingsPatch.apply(
             base,
             mapOf(
-                "selectedScene" to "BAMBOO_BOOKSTORE",
                 "theme.mode" to "DARK",
                 "theme.preset" to "OCEAN",
                 "overlay.style" to "COMPACT",
@@ -27,7 +24,6 @@ class McpSettingsPatchTest {
                 "overlay.persistBoxes" to false,
             ),
         )
-        assertEquals(SceneId.BAMBOO_BOOKSTORE, next.selectedScene)
         assertEquals(AppThemeMode.DARK, next.theme.mode)
         assertEquals(ThemePreset.OCEAN, next.theme.preset)
         assertEquals(OverlayStyle.COMPACT, next.overlay.style)
@@ -35,21 +31,6 @@ class McpSettingsPatchTest {
         assertFalse(next.overlay.persistBoxes)
     }
 
-    @Test
-    fun appliesSceneThresholdAndObstacles() {
-        val base = AppConfig()
-        val next = McpSettingsPatch.apply(
-            base,
-            mapOf(
-                "scenes.SEA_SALT_LIVING_ROOM.thresholds.minimumConfidence" to 0.55,
-                "scenes.SEA_SALT_LIVING_ROOM.disabledObstacles" to listOf("SEA_PIT", "SAND_CASTLE"),
-            ),
-        )
-        val scene = next.scenes.getValue(SceneId.SEA_SALT_LIVING_ROOM)
-        assertEquals(0.55f, scene.thresholds.minimumConfidence, 1e-4f)
-        assertTrue(scene.disabledObstacles.contains(ObstacleKind.SEA_PIT))
-        assertTrue(scene.disabledObstacles.contains(ObstacleKind.SAND_CASTLE))
-    }
 
     @Test
     fun appliesBatchOperations() {
@@ -152,14 +133,11 @@ class McpSettingsPatchTest {
         listOf(
             "get_runtime_snapshot",
             "patch_settings",
-            "set_scene",
             "set_theme",
             "set_developer_enabled",
             "get_automation_gates",
-            "list_algorithms",
             "get_logs",
             "export_diagnostics",
-            "download_algorithm",
             "get_mcp_status",
             "list_mcp_tools",
             "set_mcp_enabled",
@@ -176,7 +154,6 @@ class McpSettingsPatchTest {
         }
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("set_developer_enabled")!!.risk)
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("set_automation_enabled")!!.risk)
-        assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("download_algorithm")!!.risk)
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("set_mcp_tool_policy")!!.risk)
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("set_mcp_permission_level")!!.risk)
         assertTrue(McpToolCatalog.tools.any { it.name == "inspect" })
@@ -193,16 +170,13 @@ class McpSettingsPatchTest {
             "list_profiles",
             "delete_profile",
             "get_events",
-            "upgrade_algorithms",
             "get_version",
             "check_update",
             "get_metrics",
         ).forEach { assertTrue("$it missing", names.contains(it)) }
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("get_debug_frame")!!.risk)
         assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("capture_debug_frame")!!.risk)
-        assertEquals(McpToolRisk.HIGH_RISK, McpToolCatalog.tool("upgrade_algorithms")!!.risk)
         assertTrue(McpToolCatalog.resources.any { it.uri == "app://runtime/snapshot" })
-        assertTrue(McpToolCatalog.resources.any { it.uri == "app://algorithm/active" })
         assertTrue(McpToolCatalog.resources.any { it.uri == "app://mcp/status" })
         assertTrue(McpToolCatalog.resources.any { it.uri == "app://events" })
         // 每个工具都有中文标题（不得回退成纯工具名）

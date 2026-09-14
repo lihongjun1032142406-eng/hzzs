@@ -88,7 +88,6 @@ import top.azek431.hzzs.core.designsystem.contentStepForwardExit
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.CaptureBackend
 import top.azek431.hzzs.core.model.OverlayStyle
-import top.azek431.hzzs.core.model.SceneId
 import top.azek431.hzzs.core.model.ThemePreset
 import top.azek431.hzzs.core.model.displayName
 import top.azek431.hzzs.core.preferences.validated
@@ -256,13 +255,12 @@ fun OnboardingScreen(
                 item {
                     when (current) {
                         0 -> WelcomePage()
-                        1 -> SeasonPage(draft) { scene -> update { it.copy(selectedScene = scene) } }
-                        2 -> CapturePage(
+                        1 -> CapturePage(
                             draft = draft,
                             capabilities = onboardingCaptures,
                             onSelect = { backend -> update { it.copy(captureBackend = backend) } },
                         )
-                        3 -> PermissionsPage()
+                        2 -> PermissionsPage()
                         else -> FinishPage(
                             draft = draft,
                             onTheme = { preset -> update { it.copy(theme = it.theme.copy(preset = preset)) } },
@@ -381,37 +379,6 @@ private fun WelcomePage() {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SeasonPage(config: AppConfig, onSelect: (SceneId) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionCard {
-            Text(
-                stringResource(R.string.onboarding_season_section),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                stringResource(R.string.onboarding_season_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SceneId.entries.forEach { scene ->
-                    FilterChip(
-                        selected = config.selectedScene == scene,
-                        onClick = { onSelect(scene) },
-                        label = { Text(scene.displayName()) },
-                    )
-                }
-            }
-        }
-        HzzsCallout(
-            text = stringResource(R.string.onboarding_season_hint),
-            tone = HzzsCalloutTone.INFO,
-        )
-    }
-}
 
 @Composable
 private fun CapturePage(
@@ -613,7 +580,6 @@ private fun FinishPage(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SummaryLine(stringResource(R.string.onboarding_finish_scene, draft.selectedScene.displayName()))
             SummaryLine(stringResource(R.string.onboarding_finish_capture, draft.captureBackend.displayName()))
             SummaryLine(stringResource(R.string.onboarding_finish_theme, draft.theme.preset.displayName()))
             SummaryLine(stringResource(R.string.onboarding_finish_overlay, draft.overlay.style.displayName()))
@@ -748,11 +714,6 @@ private fun onboardingPageMetas(): List<OnboardingPageMeta> = listOf(
         stringResource(R.string.onboarding_page0_title),
         stringResource(R.string.onboarding_page0_subtitle),
         Icons.Rounded.Info,
-    ),
-    OnboardingPageMeta(
-        stringResource(R.string.onboarding_page1_title),
-        stringResource(R.string.onboarding_page1_subtitle),
-        Icons.Rounded.Analytics,
     ),
     OnboardingPageMeta(
         stringResource(R.string.onboarding_page2_title),

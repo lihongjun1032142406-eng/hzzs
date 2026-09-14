@@ -1,5 +1,5 @@
 /**
- * 诊断摘要构建：版本 / 机型 / 配置摘要 / 算法激活 / 运行态 / 最近日志。
+ * 诊断摘要构建：版本 / 机型 / 配置摘要 / 运行态 / 最近日志。
  *
  * 安全：不包含 MCP Bearer、签名密钥、调试帧像素；配置仅摘要字段。
  */
@@ -9,8 +9,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
-import top.azek431.hzzs.core.algorithm.AlgorithmPipelineTrace
-import top.azek431.hzzs.core.algorithm.AlgorithmRuntimeTrace
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.RuntimeStatus
 import top.azek431.hzzs.platform.compat.ShizukuHealthCheck
@@ -27,18 +25,6 @@ data class McpDiagnosticsSnapshot(
     val running: Boolean,
     val port: Int?,
     val lastError: String?,
-)
-
-/** 算法激活快照摘要（供诊断导出，不含 profile 大字段）。 */
-data class AlgorithmDiagnosticsSnapshot(
-    val algorithmId: String,
-    val version: String,
-    val generation: Long,
-    val usingBuiltinFallback: Boolean,
-    val loadError: String?,
-    val nativeAvailable: Boolean,
-    val pendingCatalogId: String?,
-    val analysisRunning: Boolean,
 )
 
 object DiagnosticsExporter {
@@ -58,7 +44,6 @@ object DiagnosticsExporter {
      * @param versionCode 应用 versionCode
      * @param config 当前已保存（或草稿）配置
      * @param mcp MCP 状态；可为 null
-     * @param algorithm 当前算法激活摘要；可为 null
      * @param runtime 视觉运行时状态；可为 null
      * @param debugFrameCount 私有目录调试帧张数
      * @param appContext 可选；用于读系统指针位置 / Shizuku 就绪（JVM 单测可 null）
@@ -70,7 +55,6 @@ object DiagnosticsExporter {
         config: AppConfig,
         mcp: McpDiagnosticsSnapshot?,
         debugFrameCount: Int,
-        algorithm: AlgorithmDiagnosticsSnapshot? = null,
         runtime: RuntimeStatus? = null,
         appContext: Context? = null,
         logLimit: Int = 200,
@@ -96,7 +80,6 @@ object DiagnosticsExporter {
             appendLine("abi=${abis.ifBlank { "unknown" }}")
             appendLine()
             appendLine("== Config summary ==")
-            appendLine("scene=${config.selectedScene.name}")
             appendLine("captureBackend=${config.captureBackend.name}")
             appendLine("overlay.enabled=${config.overlay.enabled}")
             appendLine("overlay.style=${config.overlay.style.name}")
@@ -110,23 +93,6 @@ object DiagnosticsExporter {
             appendLine(
                 "automation.allowedPackages=" +
                     config.automation.allowedPackages.sorted().joinToString(",").ifBlank { "-" },
-            )
-            appendLine(
-                "automation.bambooExperimental=${config.automation.bambooExperimentalAutoAction} " +
-                    "(legacy unused at runtime)",
-            )
-            appendLine(
-                "automation.autoAdjustTriggerDistance=${config.automation.autoAdjustTriggerDistance}",
-            )
-            appendLine(
-                "automation.triggerPlayerWidths=" +
-                    "sweet=${"%.2f".format(config.automation.sweetTriggerDistancePlayerWidths)}" +
-                    ",bamboo=${"%.2f".format(config.automation.bambooTriggerDistancePlayerWidths)}" +
-                    ",sea=${"%.2f".format(config.automation.seaSaltTriggerDistancePlayerWidths)}",
-            )
-            appendLine(
-                "automation.minimumSceneConfidence=" +
-                    "%.2f".format(config.automation.minimumSceneConfidence),
             )
             appendLine("automation.maxActionsPerSecond=${config.automation.maxActionsPerSecond}")
             appendLine("automation.retryLimit=${config.automation.retryLimit}")
@@ -228,25 +194,8 @@ object DiagnosticsExporter {
             } else {
                 appendLine("system.pointerLocation=(no context)")
             }
-            appendLine("algorithm.mode=${config.algorithm.selectionMode.name}")
-            appendLine("algorithm.pinned=${config.algorithm.pinnedAlgorithmId ?: "-"}")
-            appendLine("algorithm.channel=${config.algorithm.channel.name}")
             appendLine("update.channel=${config.update.channel.name}")
             appendLine("update.source=${config.update.sourcePreference.name}")
-            appendLine()
-            appendLine("== Algorithm activation ==")
-            if (algorithm != null) {
-                appendLine("id=${algorithm.algorithmId}")
-                appendLine("version=${algorithm.version}")
-                appendLine("generation=${algorithm.generation}")
-                appendLine("usingBuiltinFallback=${algorithm.usingBuiltinFallback}")
-                appendLine("loadError=${algorithm.loadError?.let(AppLog::redact) ?: "-"}")
-                appendLine("nativeAvailable=${algorithm.nativeAvailable}")
-                appendLine("pendingCatalogId=${algorithm.pendingCatalogId ?: "-"}")
-                appendLine("analysisRunning=${algorithm.analysisRunning}")
-            } else {
-                appendLine("(unavailable)")
-            }
             appendLine()
             appendLine("== Runtime bits ==")
             appendLine("debugFrameCount=$debugFrameCount")
@@ -255,18 +204,13 @@ object DiagnosticsExporter {
                 appendLine("vision.captureReady=${runtime.captureReady}")
                 appendLine("vision.overlayVisible=${runtime.overlayVisible}")
                 appendLine("vision.overlayBlockReason=${runtime.overlayBlockReason?.name ?: "-"}")
-                appendLine("vision.automationSessionArm=removed")
-                appendLine("vision.activeScene=${runtime.activeScene.name}")
                 appendLine("vision.activeBackend=${runtime.activeBackend.name}")
                 appendLine("vision.activeGestureBackend=${runtime.activeGestureBackend.name}")
                 appendLine("vision.fps=${"%.2f".format(runtime.fps)}")
-                appendLine("vision.processingMs=${"%.2f".format(runtime.processingMs)}")
-                appendLine("vision.obstacleCount=${runtime.obstacleCount}")
                 appendLine("vision.lastError=${runtime.lastError?.let(AppLog::redact) ?: "-"}")
-                appendLine(
-                    "vision.lastAutomationDecision=" +
-                        (runtime.lastAutomationDecision?.let(AppLog::redact) ?: "-"),
-                )
+                appendLine("cleanBase=${AppConfig.JINCHAN_CLEAN_BASE}")
+                appendLine("actionEnabled=${AppConfig.ACTION_ENABLED}")
+                appendLine("overlayDefaultEnabled=${AppConfig.OVERLAY_DEFAULT_ENABLED}")
             } else {
                 appendLine("vision.running=unknown")
             }
@@ -287,20 +231,6 @@ object DiagnosticsExporter {
             } else {
                 appendLine(access)
             }
-            appendLine()
-            appendLine("== Algorithm pipeline ==")
-            append(AlgorithmPipelineTrace.formatText().trimEnd())
-            appendLine()
-            appendLine()
-            appendLine("== Algorithm runtime frames (oldest→newest, max ${AlgorithmRuntimeTrace.CAPACITY}) ==")
-            append(AlgorithmRuntimeTrace.formatText().trimEnd())
-            appendLine()
-            appendLine()
-            appendLine(
-                "== Algorithm decisions (oldest→newest, max ${AlgorithmRuntimeTrace.DECISION_CAPACITY}) ==",
-            )
-            append(AlgorithmRuntimeTrace.formatDecisionText().trimEnd())
-            appendLine()
             appendLine()
             appendLine("== Recent logs (oldest→newest, max $logLimit) ==")
             val logs = AppLog.snapshot(logLimit)
@@ -329,41 +259,6 @@ object DiagnosticsExporter {
             appendLine("- Debug frame pixels are not included.")
             appendLine("- Timestamps use the device local timezone with offset (not UTC Z).")
             appendLine("- Overlay DEBUG_HUD / FPS / diagnostics toggles live under Overlay settings.")
-            appendLine("- External algorithm packs need release-index catalog + sha256 verification (Ed25519 official signing not yet enabled in 0.1.0).")
-            appendLine(
-                "- Algorithm frame AppLog tags: algo.frame / algo.det / algo.track / algo.decision " +
-                    "(developer on + logLevel≤DEBUG for frames; decisions INFO on skip/plan/dispatch/calc). " +
-                    "Throttled on change or every ${AlgorithmRuntimeTrace.PERIODIC_FRAMES} frames.",
-            )
-            appendLine(
-                "- Stage timing appears inside algo.frame lines (jni/detect/post/finalize ms). " +
-                    "Gated by developer.enableStageTiming (off by default; ~5-10us/frame).",
-            )
-            appendLine(
-                "- Multicolor per-template match/reject appears in algo.decision calc lines " +
-                    "and DEBUG_HUD 找色/搜索区/命中点. " +
-                    "Gated by developer.enableMulticolorDiagnostic (off by default).",
-            )
-            appendLine(
-                "- Filtered-out detections with reason appear in algo.frame (filt=N) and DEBUG_HUD 虚线框. " +
-                    "Gated by developer.enableFilterTrace (off by default).",
-            )
-            appendLine(
-                "- Decision ring retains last ${AlgorithmRuntimeTrace.DECISION_CAPACITY} " +
-                    "skip/plan/dispatch/calc lines for agent triage (no pixels).",
-            )
-            appendLine(
-                "- Runtime frame ring retains last ${AlgorithmRuntimeTrace.CAPACITY} analyses after stop " +
-                    "until next start; no pixels.",
-            )
-            appendLine(
-                "- Automation gates: a11y.connected / foreground.* / gesture.effective / " +
-                    "disclaimerAcceptedVersion / triggerPlayerWidths; decision ring explains skip:*.",
-            )
-            appendLine(
-                "- Boxes on screen ≠ gestures: algorithm+Overlay draw Detection; " +
-                    "actions need automation gates + gesture backend.",
-            )
         }
     }
 }

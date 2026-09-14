@@ -4,8 +4,6 @@ import org.json.JSONObject
 import top.azek431.hzzs.core.model.AppConfig
 import top.azek431.hzzs.core.model.CaptureBackend
 import top.azek431.hzzs.core.model.GestureBackend
-import top.azek431.hzzs.core.model.ObstacleKind
-import top.azek431.hzzs.core.model.SceneId
 
 /**
  * MCP 局部设置补丁（白名单路径）。
@@ -39,8 +37,7 @@ object McpSettingsPatch {
      * 应用批量操作。
      *
      * - SET：同 [apply]（点分路径覆盖）。
-     * - ADD / REMOVE：仅支持已知集合/列表路径（如 `automation.allowedPackages` /
-     *   `scenes.<id>.disabledObstacles`）；其它路径拒绝。
+     * - ADD / REMOVE：仅支持已知集合/列表路径（`automation.allowedPackages`）；其它路径拒绝。
      * - TOGGLE：仅支持布尔路径；省略 [Op.value]。
      */
     fun applyOperations(base: AppConfig, operations: List<Op>): AppConfig {
@@ -63,16 +60,7 @@ object McpSettingsPatch {
                 val adding = rawToStrings(raw, path)
                 cfg.copy(automation = cfg.automation.copy(allowedPackages = cfg.automation.allowedPackages + adding))
             }
-            else -> {
-                val m = SCENE_PATH.matchEntire(path)
-                require(m != null && m.groupValues[2] == "disabledObstacles") {
-                    "add 仅支持 automation.allowedPackages 或 scenes.<id>.disabledObstacles：$path"
-                }
-                val sceneId = enumValueOf<SceneId>(m.groupValues[1])
-                val scene = cfg.scenes[sceneId] ?: error("未知场景：${m.groupValues[1]}")
-                val adding = rawToObstacleKinds(raw, path)
-                cfg.copy(scenes = cfg.scenes + (sceneId to scene.copy(disabledObstacles = scene.disabledObstacles + adding)))
-            }
+            else -> throw IllegalArgumentException("add 仅支持 automation.allowedPackages：$path")
         }
     }
 
@@ -83,16 +71,7 @@ object McpSettingsPatch {
                 val removing = rawToStrings(raw, path)
                 cfg.copy(automation = cfg.automation.copy(allowedPackages = cfg.automation.allowedPackages - removing))
             }
-            else -> {
-                val m = SCENE_PATH.matchEntire(path)
-                require(m != null && m.groupValues[2] == "disabledObstacles") {
-                    "remove 仅支持 automation.allowedPackages 或 scenes.<id>.disabledObstacles：$path"
-                }
-                val sceneId = enumValueOf<SceneId>(m.groupValues[1])
-                val scene = cfg.scenes[sceneId] ?: error("未知场景：${m.groupValues[1]}")
-                val removing = rawToObstacleKinds(raw, path)
-                cfg.copy(scenes = cfg.scenes + (sceneId to scene.copy(disabledObstacles = scene.disabledObstacles - removing)))
-            }
+            else -> throw IllegalArgumentException("remove 仅支持 automation.allowedPackages：$path")
         }
     }
 
@@ -103,29 +82,15 @@ object McpSettingsPatch {
         else -> error("$path 须为字符串数组或逗号分隔字符串")
     }
 
-    /** 解析障碍枚举集合。 */
-    private fun rawToObstacleKinds(raw: Any?, path: String): Set<ObstacleKind> = obstacleSet(raw, path)
-
     private fun applyToggle(cfg: AppConfig, path: String): AppConfig = when (path) {
         "overlay.enabled" -> cfg.copy(overlay = cfg.overlay.copy(enabled = !cfg.overlay.enabled))
         "theme.dynamicColorEnabled" -> cfg.copy(theme = cfg.theme.copy(dynamicColorEnabled = !cfg.theme.dynamicColorEnabled))
         "theme.reduceMotion" -> cfg.copy(theme = cfg.theme.copy(reduceMotion = !cfg.theme.reduceMotion))
         "theme.highContrast" -> cfg.copy(theme = cfg.theme.copy(highContrast = !cfg.theme.highContrast))
         "automation.restrictPackages" -> cfg.copy(automation = cfg.automation.copy(restrictPackages = !cfg.automation.restrictPackages))
-        "automation.autoAdjustTriggerDistance" -> cfg.copy(
-            automation = cfg.automation.copy(autoAdjustTriggerDistance = !cfg.automation.autoAdjustTriggerDistance),
-        )
         "automation.autoReviveEnabled" -> cfg.copy(automation = cfg.automation.copy(autoReviveEnabled = !cfg.automation.autoReviveEnabled))
-        "automation.bambooExperimentalAutoAction" -> cfg.copy(
-            automation = cfg.automation.copy(bambooExperimentalAutoAction = !cfg.automation.bambooExperimentalAutoAction),
-        )
         "developer.saveDebugFrames" -> cfg.copy(developer = cfg.developer.copy(saveDebugFrames = !cfg.developer.saveDebugFrames))
         "developer.showCoordinateGrid" -> cfg.copy(developer = cfg.developer.copy(showCoordinateGrid = !cfg.developer.showCoordinateGrid))
-        "developer.enableStageTiming" -> cfg.copy(developer = cfg.developer.copy(enableStageTiming = !cfg.developer.enableStageTiming))
-        "developer.enableMulticolorDiagnostic" -> cfg.copy(
-            developer = cfg.developer.copy(enableMulticolorDiagnostic = !cfg.developer.enableMulticolorDiagnostic),
-        )
-        "developer.enableFilterTrace" -> cfg.copy(developer = cfg.developer.copy(enableFilterTrace = !cfg.developer.enableFilterTrace))
         "mcp.accessLogEnabled" -> cfg.copy(mcp = cfg.mcp.copy(accessLogEnabled = !cfg.mcp.accessLogEnabled))
         "mcp.allowDebugFrames" -> cfg.copy(mcp = cfg.mcp.copy(allowDebugFrames = !cfg.mcp.allowDebugFrames))
         else -> throw IllegalArgumentException("toggle 仅支持已知布尔路径：$path")
@@ -134,7 +99,6 @@ object McpSettingsPatch {
     private fun applyOne(cfg: AppConfig, path: String, raw: Any?): AppConfig {
         require(path.isNotBlank()) { "补丁路径不能为空" }
         return when (path) {
-            "selectedScene" -> cfg.copy(selectedScene = enumValue(raw, path))
             "captureBackend" -> cfg.copy(captureBackend = enumValue(raw, path))
             "theme.mode" -> cfg.copy(theme = cfg.theme.copy(mode = enumValue(raw, path)))
             "theme.preset" -> cfg.copy(theme = cfg.theme.copy(preset = enumValue(raw, path)))
@@ -179,31 +143,8 @@ object McpSettingsPatch {
             "automation.maxActionsPerSecond" -> cfg.copy(
                 automation = cfg.automation.copy(maxActionsPerSecond = int(raw, path)),
             )
-            "automation.minimumSceneConfidence" -> cfg.copy(
-                automation = cfg.automation.copy(minimumSceneConfidence = float(raw, path)),
-            )
             "automation.retryLimit" -> cfg.copy(
                 automation = cfg.automation.copy(retryLimit = int(raw, path)),
-            )
-            "automation.sweetTriggerDistancePlayerWidths" -> cfg.copy(
-                automation = cfg.automation.copy(
-                    sweetTriggerDistancePlayerWidths = float(raw, path),
-                ),
-            )
-            "automation.bambooTriggerDistancePlayerWidths" -> cfg.copy(
-                automation = cfg.automation.copy(
-                    bambooTriggerDistancePlayerWidths = float(raw, path),
-                ),
-            )
-            "automation.seaSaltTriggerDistancePlayerWidths" -> cfg.copy(
-                automation = cfg.automation.copy(
-                    seaSaltTriggerDistancePlayerWidths = float(raw, path),
-                ),
-            )
-            "automation.bambooExperimentalAutoAction" -> cfg.copy(
-                automation = cfg.automation.copy(
-                    bambooExperimentalAutoAction = bool(raw, path),
-                ),
             )
             "automation.restrictPackages" -> cfg.copy(
                 automation = cfg.automation.copy(restrictPackages = bool(raw, path)),
@@ -212,9 +153,6 @@ object McpSettingsPatch {
                 val list = rawToStrings(raw, path)
                 cfg.copy(automation = cfg.automation.copy(allowedPackages = list.toSet()))
             }
-            "automation.autoAdjustTriggerDistance" -> cfg.copy(
-                automation = cfg.automation.copy(autoAdjustTriggerDistance = bool(raw, path)),
-            )
             "automation.autoReviveEnabled" -> cfg.copy(
                 automation = cfg.automation.copy(autoReviveEnabled = bool(raw, path)),
             )
@@ -244,105 +182,16 @@ object McpSettingsPatch {
             "developer.logRingCapacity" -> cfg.copy(
                 developer = cfg.developer.copy(logRingCapacity = int(raw, path)),
             )
-            "developer.enableStageTiming" -> cfg.copy(
-                developer = cfg.developer.copy(enableStageTiming = bool(raw, path)),
-            )
-            "developer.enableMulticolorDiagnostic" -> cfg.copy(
-                developer = cfg.developer.copy(enableMulticolorDiagnostic = bool(raw, path)),
-            )
-            "developer.enableFilterTrace" -> cfg.copy(
-                developer = cfg.developer.copy(enableFilterTrace = bool(raw, path)),
-            )
             "mcp.allowDebugFrames" -> cfg.copy(
                 mcp = cfg.mcp.copy(allowDebugFrames = bool(raw, path)),
             )
             "mcp.port" -> cfg.copy(mcp = cfg.mcp.copy(port = int(raw, path)))
-            "algorithm.selectionMode" -> cfg.copy(
-                algorithm = cfg.algorithm.copy(selectionMode = enumValue(raw, path)),
-            )
-            "algorithm.channel" -> cfg.copy(
-                algorithm = cfg.algorithm.copy(channel = enumValue(raw, path)),
-            )
-            "algorithm.autoCheck" -> cfg.copy(
-                algorithm = cfg.algorithm.copy(autoCheck = bool(raw, path)),
-            )
-            "algorithm.autoDownload" -> cfg.copy(
-                algorithm = cfg.algorithm.copy(autoDownload = bool(raw, path)),
-            )
-            "algorithm.pinnedAlgorithmId" -> {
-                val id = when (raw) {
-                    null, JSONObject.NULL -> null
-                    is String -> raw.trim().takeIf { it.isNotEmpty() }
-                    else -> error("algorithm.pinnedAlgorithmId 须为字符串或 null")
-                }
-                cfg.copy(algorithm = cfg.algorithm.copy(pinnedAlgorithmId = id))
-            }
             "viewport.left" -> cfg.copy(viewport = cfg.viewport.copy(left = float(raw, path)))
             "viewport.top" -> cfg.copy(viewport = cfg.viewport.copy(top = float(raw, path)))
             "viewport.right" -> cfg.copy(viewport = cfg.viewport.copy(right = float(raw, path)))
             "viewport.bottom" -> cfg.copy(viewport = cfg.viewport.copy(bottom = float(raw, path)))
-            else -> {
-                val m = SCENE_PATH.matchEntire(path)
-                if (m != null) {
-                    applyScenePath(cfg, m.groupValues[1], m.groupValues[2], raw)
-                } else {
-                    throw IllegalArgumentException("不支持的补丁路径：$path")
-                }
-            }
+            else -> throw IllegalArgumentException("不支持的补丁路径：$path")
         }
-    }
-
-    private fun applyScenePath(
-        cfg: AppConfig,
-        sceneName: String,
-        field: String,
-        raw: Any?,
-    ): AppConfig {
-        val sceneId = enumValueOf<SceneId>(sceneName)
-        val scene = cfg.scenes[sceneId] ?: error("未知场景：$sceneName")
-        val next = when (field) {
-            "enabled" -> scene.copy(enabled = bool(raw, field))
-            "disabledObstacles" -> scene.copy(disabledObstacles = rawToObstacleKinds(raw, field))
-            "thresholds.workWidth" -> scene.copy(
-                thresholds = scene.thresholds.copy(workWidth = int(raw, field)),
-            )
-            "thresholds.minimumConfidence" -> scene.copy(
-                thresholds = scene.thresholds.copy(minimumConfidence = float(raw, field)),
-            )
-            "thresholds.stableFrames" -> scene.copy(
-                thresholds = scene.thresholds.copy(stableFrames = int(raw, field)),
-            )
-            "thresholds.playerReferenceMode" -> scene.copy(
-                thresholds = scene.thresholds.copy(playerReferenceMode = enumValue(raw, field)),
-            )
-            "thresholds.fixedPlayerXRatio" -> scene.copy(
-                thresholds = scene.thresholds.copy(fixedPlayerXRatio = float(raw, field)),
-            )
-            "thresholds.behindPlayerMarginRatio" -> scene.copy(
-                thresholds = scene.thresholds.copy(behindPlayerMarginRatio = float(raw, field)),
-            )
-            else -> error("不支持的场景字段：scenes.$sceneName.$field")
-        }
-        return cfg.copy(scenes = cfg.scenes + (sceneId to next))
-    }
-
-    private val SCENE_PATH =
-        Regex("^scenes\\.(SWEET_FACTORY|BAMBOO_BOOKSTORE|SEA_SALT_LIVING_ROOM)\\.(.+)$")
-
-    private fun obstacleSet(raw: Any?, path: String): Set<ObstacleKind> {
-        val list = when (raw) {
-            is org.json.JSONArray -> (0 until raw.length()).map { raw.get(it) }
-            is Collection<*> -> raw.toList()
-            is String -> raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            else -> error("$path 须为字符串数组或逗号分隔名")
-        }
-        return list.map { item ->
-            when (item) {
-                is ObstacleKind -> item
-                is String -> enumValueOf(item)
-                else -> error("$path 含非法元素")
-            }
-        }.toSet()
     }
 
     private inline fun <reified T : Enum<T>> enumValue(raw: Any?, path: String): T {

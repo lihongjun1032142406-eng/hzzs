@@ -16,11 +16,11 @@ object McpToolLabels {
         "save_settings" to "永久保存设置",
         "patch_settings" to "白名单局部改设置",
         "reset_preview" to "清除临时预览",
-        "start_analysis" to "启动屏幕分析",
-        "stop_analysis" to "停止屏幕分析",
+        "start_analysis" to "启动截图运行时",
+        "stop_analysis" to "停止截图运行时",
         "navigate" to "打开应用内页面",
-        "cancel_actions" to "取消在飞手势",
-        "restart_analysis" to "重启屏幕分析",
+        "cancel_actions" to "取消在飞手势（Clean Base 空操作）",
+        "restart_analysis" to "重启截图运行时",
         "set_overlay_visible" to "临时显示/隐藏悬浮窗",
         "set_capture_backend" to "切换截图后端",
         "set_gesture_backend" to "切换手势后端",
@@ -32,21 +32,12 @@ object McpToolLabels {
         "clear_debug_frames" to "清除调试帧",
         "get_debug_frame" to "读取调试帧（base64 JPEG）",
         "capture_debug_frame" to "强制存下一帧调试帧",
-        "set_scene" to "切换分析赛季",
-        "set_obstacle_enabled" to "启用/禁用障碍类别",
-        "set_threshold" to "设置识别阈值",
         "set_theme" to "调整应用主题",
         "set_overlay" to "调整悬浮窗样式",
         "set_developer_enabled" to "开/关开发者选项",
         "set_developer_options" to "调整开发者选项",
         "get_automation_gates" to "解释自动操作门闩",
         "set_automation_enabled" to "开/关自动操作",
-        "list_algorithms" to "列出算法包",
-        "get_active_algorithm" to "读取当前算法",
-        "get_algorithm_pipeline" to "读取算法管线",
-        "set_active_algorithm" to "钉选激活算法",
-        "refresh_algorithm_catalog" to "刷新算法目录",
-        "download_algorithm" to "下载安装算法包",
         "get_logs" to "读取内存日志",
         "clear_logs" to "清空内存日志",
         "export_diagnostics" to "导出脱敏诊断",
@@ -60,7 +51,6 @@ object McpToolLabels {
         "list_profiles" to "列出 profile 元数据",
         "delete_profile" to "删除 profile",
         "get_events" to "拉取运行时事件",
-        "upgrade_algorithms" to "一键升级全部算法包",
         "get_mcp_access_log" to "读取 MCP 访问日志",
         "clear_mcp_access_log" to "清空 MCP 访问日志",
         "set_mcp_enabled" to "开/关 MCP 服务",
@@ -98,8 +88,6 @@ object McpToolLabels {
         "load_profile" ->
             "AI 请求${if (arguments.optBoolean("persist")) "永久应用" else "预览"}配置 profile：${arguments.optString("name")}"
         "delete_profile" -> "AI 请求删除配置 profile：${arguments.optString("name")}"
-        "upgrade_algorithms" ->
-            "AI 请求${if (arguments.optBoolean("dryRun")) "预览" else "执行"}一键升级算法包"
         "set_mcp_enabled" ->
             "AI 请求${if (arguments.optBoolean("enabled")) "启用" else "关闭"} MCP 服务"
         "set_mcp_permission_level" ->
@@ -108,10 +96,6 @@ object McpToolLabels {
         "set_mcp_tool_policy" ->
             "AI 请求设置工具策略：${arguments.optString("tool")}=${arguments.optString("policy")}"
         "clear_mcp_access_log" -> "AI 请求清空 MCP 访问日志"
-        "set_scene" -> "AI 请求切换赛季：${arguments.optString("scene")}"
-        "set_obstacle_enabled" ->
-            "AI 请求${if (arguments.optBoolean("enabled")) "启用" else "禁用"}障碍 ${arguments.optString("kind")}"
-        "set_threshold" -> "AI 请求修改阈值 ${arguments.optString("key")}"
         "set_theme" -> "AI 请求修改主题"
         "set_overlay" -> "AI 请求修改悬浮窗"
         "set_developer_enabled" ->
@@ -119,9 +103,6 @@ object McpToolLabels {
         "set_developer_options" -> "AI 请求修改开发者选项"
         "set_automation_enabled" ->
             "AI 请求${if (arguments.optBoolean("enabled")) "开启" else "关闭"}自动操作"
-        "set_active_algorithm" -> "AI 请求切换算法：${arguments.optString("algorithmId")}"
-        "refresh_algorithm_catalog" -> "AI 请求刷新算法目录"
-        "download_algorithm" -> "AI 请求下载算法：${arguments.optString("algorithmId")}"
         "clear_logs" -> "AI 请求清空内存日志"
         "open_system_settings" -> "AI 请求打开系统设置：${arguments.optString("target")}"
         else -> "AI 请求执行：$toolName（${arguments.length()} 个参数）"

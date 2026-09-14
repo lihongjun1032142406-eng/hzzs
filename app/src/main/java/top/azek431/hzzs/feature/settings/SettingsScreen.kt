@@ -57,12 +57,9 @@ import top.azek431.hzzs.core.designsystem.sharedAxisXPopEnter
 import top.azek431.hzzs.core.designsystem.sharedAxisXPopExit
 import top.azek431.hzzs.feature.settings.model.SettingsCategory
 import top.azek431.hzzs.feature.settings.model.SettingsRoutes
-import top.azek431.hzzs.feature.settings.screens.AlgorithmPipelineScreen
-import top.azek431.hzzs.feature.settings.screens.AlgorithmSettingsScreen
 import top.azek431.hzzs.feature.settings.screens.AppearanceSettingsScreen
 import top.azek431.hzzs.feature.settings.screens.AutomationSettingsScreen
 import top.azek431.hzzs.feature.settings.screens.CaptureSettingsScreen
-import top.azek431.hzzs.feature.settings.screens.DetectionSettingsScreen
 import top.azek431.hzzs.feature.settings.screens.DeveloperSettingsScreen
 import top.azek431.hzzs.feature.settings.screens.LogViewerScreen
 import top.azek431.hzzs.feature.settings.screens.McpAccessLogViewerScreen
@@ -89,7 +86,6 @@ fun SettingsScreen(
     val config by vm.draft.collectAsState()
     val dirty by vm.dirty.collectAsState()
     val updateState by vm.updateState.collectAsState()
-    val algorithmState by vm.algorithmState.collectAsState()
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: SettingsRoutes.HOME
@@ -163,8 +159,6 @@ fun SettingsScreen(
     val title = when (route) {
         SettingsRoutes.HOME -> settingsLabel
         SettingsCategory.APPEARANCE.route -> stringResource(SettingsCategory.APPEARANCE.titleRes)
-        SettingsCategory.ALGORITHM.route -> stringResource(SettingsCategory.ALGORITHM.titleRes)
-        SettingsCategory.DETECTION.route -> stringResource(SettingsCategory.DETECTION.titleRes)
         SettingsCategory.CAPTURE.route -> stringResource(SettingsCategory.CAPTURE.titleRes)
         SettingsCategory.OVERLAY.route -> stringResource(SettingsCategory.OVERLAY.titleRes)
         SettingsCategory.AUTOMATION.route -> stringResource(SettingsCategory.AUTOMATION.titleRes)
@@ -172,7 +166,6 @@ fun SettingsScreen(
         SettingsCategory.MCP.route -> stringResource(SettingsCategory.MCP.titleRes)
         SettingsCategory.DEVELOPER.route -> stringResource(SettingsCategory.DEVELOPER.titleRes)
         SettingsRoutes.LOG_VIEWER -> stringResource(R.string.log_viewer_title)
-        SettingsRoutes.ALGORITHM_PIPELINE -> stringResource(R.string.algorithm_pipeline_title)
         SettingsRoutes.MCP_ACCESS_LOG -> stringResource(R.string.mcp_access_log_viewer_title)
         else -> settingsLabel
     }
@@ -282,7 +275,6 @@ fun SettingsScreen(
                     ) {
                         SettingsHomeScreen(
                             config = config,
-                            algorithmState = algorithmState,
                             onOpen = { category ->
                                 if (route != category.route) {
                                     nav.navigate(category.route) {
@@ -298,7 +290,6 @@ fun SettingsScreen(
                         vm = vm,
                         config = config,
                         updateState = updateState,
-                        algorithmState = algorithmState,
                         onMessage = { message = it },
                         modifier = Modifier.weight(1f),
                         startAtHome = false,
@@ -310,7 +301,6 @@ fun SettingsScreen(
                     vm = vm,
                     config = config,
                     updateState = updateState,
-                    algorithmState = algorithmState,
                     onMessage = { message = it },
                     modifier = Modifier.fillMaxSize(),
                     startAtHome = true,
@@ -327,7 +317,6 @@ private fun SettingsNavHost(
     vm: SettingsViewModel,
     config: top.azek431.hzzs.core.model.AppConfig,
     updateState: UpdateUiState,
-    algorithmState: top.azek431.hzzs.core.algorithm.AlgorithmCatalogState,
     onMessage: (String) -> Unit,
     modifier: Modifier,
     startAtHome: Boolean,
@@ -345,7 +334,6 @@ private fun SettingsNavHost(
         composable(SettingsRoutes.HOME) {
             SettingsHomeScreen(
                 config = config,
-                algorithmState = algorithmState,
                 onOpen = { category ->
                     nav.navigate(category.route) { launchSingleTop = true }
                 },
@@ -358,26 +346,6 @@ private fun SettingsNavHost(
                 exportTheme = vm::exportTheme,
                 importTheme = vm::importTheme,
                 onMessage = onMessage,
-            )
-        }
-        composable(SettingsCategory.ALGORITHM.route) {
-            AlgorithmSettingsScreen(
-                config = config,
-                algorithmState = algorithmState,
-                update = vm::update,
-                onRefresh = vm::refreshAlgorithms,
-                onDownload = vm::downloadAlgorithm,
-                onCancelDownload = vm::cancelAlgorithmDownload,
-                onSelect = vm::selectAlgorithm,
-                onMessage = onMessage,
-                onUpgradeAll = vm::upgradeAlgorithms,
-                onClearUpgradePrompt = vm::clearAlgorithmUpgradePrompt,
-            )
-        }
-        composable(SettingsCategory.DETECTION.route) {
-            DetectionSettingsScreen(
-                config = config,
-                update = vm::update,
             )
         }
         composable(SettingsCategory.CAPTURE.route) {
@@ -401,13 +369,11 @@ private fun SettingsNavHost(
             NetworkUpdateSettingsScreen(
                 config = config,
                 updateState = updateState,
-                algorithmState = algorithmState,
                 update = vm::update,
                 onCheckApp = vm::checkForUpdates,
                 onDownloadApp = vm::downloadAvailableUpdate,
                 onInstallApp = vm::installDownloadedUpdate,
                 onIgnoreApp = vm::ignoreAvailableUpdate,
-                onRefreshAlgorithms = vm::refreshAlgorithms,
             )
         }
         composable(SettingsCategory.MCP.route) {
@@ -424,22 +390,16 @@ private fun SettingsNavHost(
         }
         composable(SettingsCategory.DEVELOPER.route) {
             val debugFrameCount by vm.debugFrameCount.collectAsState()
-            val benchmark by vm.benchmark.collectAsState()
             DeveloperSettingsScreen(
                 developerEnabled = config.developer.enabled,
                 config = config,
                 update = vm::update,
                 debugFrameCount = debugFrameCount,
-                benchmark = benchmark,
                 onRefreshDebugFrames = vm::refreshDebugFrameCount,
                 onClearDebugFrames = vm::clearDebugFrames,
-                onRunBenchmark = vm::runNativeBenchmark,
                 onBuildDiagnostics = vm::buildDiagnosticsReport,
                 onOpenLogViewer = {
                     nav.navigate(SettingsRoutes.LOG_VIEWER) { launchSingleTop = true }
-                },
-                onOpenAlgorithmPipeline = {
-                    nav.navigate(SettingsRoutes.ALGORITHM_PIPELINE) { launchSingleTop = true }
                 },
                 onMessage = onMessage,
             )
@@ -448,15 +408,6 @@ private fun SettingsNavHost(
             LogViewerScreen(
                 onBack = { nav.popBackStack() },
                 onMessage = onMessage,
-            )
-        }
-        composable(SettingsRoutes.ALGORITHM_PIPELINE) {
-            AlgorithmPipelineScreen(
-                onBack = { nav.popBackStack() },
-                onMessage = onMessage,
-                onOpenLogs = {
-                    nav.navigate(SettingsRoutes.LOG_VIEWER) { launchSingleTop = true }
-                },
             )
         }
         composable(SettingsRoutes.MCP_ACCESS_LOG) {

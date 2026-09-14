@@ -258,7 +258,6 @@ class AppViewModel @Inject constructor(
     private val repository: SettingsRepository,
     val mcpUiBridge: McpUiBridge,
     private val updateRepository: top.azek431.hzzs.core.update.UpdateRepository,
-    private val algorithmCatalog: top.azek431.hzzs.core.algorithm.AlgorithmCatalogController,
     private val captureCapabilityResolver: top.azek431.hzzs.platform.compat.CaptureCapabilityResolver,
 ) : ViewModel() {
     val config: StateFlow<AppConfig> = repository.config.stateIn(
@@ -280,7 +279,7 @@ class AppViewModel @Inject constructor(
     fun onboardingCaptureCapabilities(): List<top.azek431.hzzs.platform.compat.CaptureCapability> =
         captureCapabilityResolver.all()
 
-    /** 启动后按配置尝试静默检查更新与算法目录；失败只写日志，不打扰用户。 */
+    /** 启动后按配置尝试静默检查应用更新；失败只写日志，不打扰用户。 */
     fun maybeAutoCheckUpdates() {
         viewModelScope.launch {
             val snapshot = repository.snapshot()
@@ -291,15 +290,6 @@ class AppViewModel @Inject constructor(
                         sourcePreference = snapshot.update.sourcePreference,
                     )
                 }
-            }
-            if (snapshot.algorithm.autoCheck) {
-                algorithmCatalog.bindSettings(
-                    algorithm = snapshot.algorithm,
-                    sourcePreference = snapshot.update.sourcePreference,
-                    selectedScene = snapshot.selectedScene,
-                    wifiOnly = snapshot.update.wifiOnly,
-                )
-                algorithmCatalog.refreshCatalog(force = true)
             }
         }
     }

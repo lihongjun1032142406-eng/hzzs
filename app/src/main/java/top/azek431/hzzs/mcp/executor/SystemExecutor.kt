@@ -11,7 +11,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import top.azek431.hzzs.BuildConfig
 import top.azek431.hzzs.core.logging.AppLog
-import top.azek431.hzzs.core.logging.AlgorithmDiagnosticsSnapshot
 import top.azek431.hzzs.core.logging.DiagnosticsExporter
 import top.azek431.hzzs.core.logging.McpDiagnosticsSnapshot
 import top.azek431.hzzs.core.model.AppLogLevel
@@ -22,8 +21,6 @@ import top.azek431.hzzs.core.preferences.SettingsRepository
 import top.azek431.hzzs.core.update.UpdateRepository
 import top.azek431.hzzs.data.vision.DebugFrameRecorder
 import top.azek431.hzzs.data.vision.VisionRuntimeController
-import top.azek431.hzzs.domain.vision.VisionEngine
-import top.azek431.hzzs.domain.vision.VisionResult
 import top.azek431.hzzs.mcp.McpEventBus
 import top.azek431.hzzs.mcp.McpUiBridge
 import top.azek431.hzzs.mcp.ok
@@ -46,7 +43,6 @@ class SystemExecutor @Inject constructor(
     private val runtime: VisionRuntimeController,
     private val uiBridge: McpUiBridge,
     private val debugFrames: DebugFrameRecorder,
-    private val visionEngine: VisionEngine,
     private val updateRepository: UpdateRepository,
 ) : ToolExecutor {
     override val toolNames: Set<String> = setOf(
@@ -109,10 +105,10 @@ class SystemExecutor @Inject constructor(
             normalized in allowedTops -> normalized
             normalized.startsWith("settings/") ||
                 normalized in setOf(
-                    "appearance", "overlay", "capture", "algorithm", "detection",
+                    "appearance", "overlay", "capture",
                     "automation", "network", "mcp", "developer",
-                    "settings_home", "log_viewer", "algorithm_pipeline",
-                    "logs", "pipeline",
+                    "settings_home", "log_viewer",
+                    "logs",
                 ) -> "settings"
             else -> error(
                 "未知页面：$route（可用 home/runtime/settings/about 或 settings/mcp、developer、log_viewer）",
@@ -200,7 +196,6 @@ class SystemExecutor @Inject constructor(
         val logLimit = arguments.optInt("logLimit", 200).coerceIn(0, 800)
         val snap = settings.current()
         val mcpState = uiBridge.serverState.value
-        val activation = visionEngine.currentActivation()
         val text = DiagnosticsExporter.buildReport(
             versionName = BuildConfig.VERSION_NAME,
             versionCode = BuildConfig.VERSION_CODE.toLong(),
@@ -211,16 +206,6 @@ class SystemExecutor @Inject constructor(
                 lastError = mcpState.lastError,
             ),
             debugFrameCount = runCatching { debugFrames.list().size }.getOrDefault(0),
-            algorithm = AlgorithmDiagnosticsSnapshot(
-                algorithmId = activation.profile.algorithmId,
-                version = activation.profile.version,
-                generation = activation.generation,
-                usingBuiltinFallback = activation.usingBuiltinFallback,
-                loadError = activation.loadError,
-                nativeAvailable = top.azek431.hzzs.nativevision.NativeVision.isAvailable,
-                pendingCatalogId = null,
-                analysisRunning = runtime.status.value.running,
-            ),
             runtime = runtime.status.value,
             appContext = appContext,
             logLimit = logLimit,
@@ -236,47 +221,19 @@ class SystemExecutor @Inject constructor(
             .orEmpty()
         fun want(name: String) = include.isEmpty() || name in include
         val status = runtime.status.value
-        val latest: VisionResult? = runtime.latestResult.value
         val cfg = settings.current()
         return JSONObject().apply {
             if (want("status")) put("status", status.toJson())
-            if (want("latest")) {
-                put("latest", latest?.toJson() ?: JSONObject.NULL)
+            if (want("cleanbase")) {
                 put(
-                    "latestSummary",
-                    latest?.let { r ->
-                        JSONObject().apply {
-                            put("scene", r.scene.name)
-                            put("sceneConfidence", r.sceneConfidence.toDouble())
-                            put("detectionCount", r.detections.size)
-                            put(
-                                "kindHistogram",
-                                JSONObject().apply {
-                                    r.detections.groupingBy { it.kind.name }.eachCount().forEach { (k, v) ->
-                                        put(k, v)
-                                    }
-                                },
-                            )
-                            put(
-                                "hasPlayer",
-                                r.detections.any {
-                                    it.kind == top.azek431.hzzs.domain.vision.ObjectKind.PLAYER
-                                },
-                            )
-                        }
-                    } ?: JSONObject.NULL,
-                )
-            }
-            if (want("algorithm")) {
-                val activation = visionEngine.currentActivation()
-                put(
-                    "algorithm",
+                    "cleanBase",
                     JSONObject().apply {
-                        put("id", activation.profile.algorithmId)
-                        put("version", activation.profile.version)
-                        put("generation", activation.generation)
-                        put("usingBuiltinFallback", activation.usingBuiltinFallback)
-                        put("loadError", activation.loadError ?: JSONObject.NULL)
+                        put("enabled", AppConfig.JINCHAN_CLEAN_BASE)
+                        put("actionEnabled", AppConfig.ACTION_ENABLED)
+                        put("overlayDefaultEnabled", AppConfig.OVERLAY_DEFAULT_ENABLED)
+                        put("builtinGameVision", false)
+                        put("builtinTracker", false)
+                        put("algorithmPackRuntime", false)
                     },
                 )
             }
@@ -313,12 +270,9 @@ class SystemExecutor @Inject constructor(
     private suspend fun automationGatesJson(): JSONObject {
         val saved = settings.snapshot()
         val status = runtime.status.value
-        val latest = runtime.latestResult.value
         val a11y = HzzsAccessibilityService.isConnected()
         val auto = saved.automation
         val disclaimerOk = auto.disclaimerAcceptedVersion >= AppConfig.DISCLAIMER_VERSION
-        val sceneConf = latest?.sceneConfidence
-        val sceneOk = sceneConf == null || sceneConf >= auto.minimumSceneConfidence
         val gestureRequested = auto.gestureBackend
         val gestureEffective = when {
             status.running -> status.activeGestureBackend
@@ -343,6 +297,8 @@ class SystemExecutor @Inject constructor(
         val packageBlocked = auto.restrictPackages &&
             (fg == null || fg.packageName !in auto.allowedPackages)
         val blockers = buildList {
+            // Clean Base：真实动作总闸恒关，任何自动操作都必须在此被拦下。
+            if (!AppConfig.ACTION_ENABLED) add("action_disabled clean_base")
             if (!auto.enabled) add("automation.enabled=false")
             if (!disclaimerOk) {
                 add("disclaimerAcceptedVersion=${auto.disclaimerAcceptedVersion}<${AppConfig.DISCLAIMER_VERSION}")
@@ -350,9 +306,6 @@ class SystemExecutor @Inject constructor(
             if (!status.running) add("analysis.not_running")
             if (!a11y && needsA11y) {
                 add("accessibility.not_connected")
-            }
-            if (!sceneOk) {
-                add("sceneConfidence=${sceneConf ?: "n/a"}<minimum=${auto.minimumSceneConfidence}")
             }
             if (packageBlocked) {
                 add(
@@ -364,6 +317,8 @@ class SystemExecutor @Inject constructor(
         }
         return JSONObject().apply {
             put("source", "saved")
+            put("cleanBase", AppConfig.JINCHAN_CLEAN_BASE)
+            put("actionEnabled", AppConfig.ACTION_ENABLED)
             put("automationEnabled", auto.enabled)
             put("gestureBackend", gestureRequested.name)
             put("activeGestureBackend", gestureEffective.name)
@@ -372,12 +327,6 @@ class SystemExecutor @Inject constructor(
             put("disclaimerOk", disclaimerOk)
             put("analysisRunning", status.running)
             put("accessibilityConnected", a11y)
-            put("selectedScene", saved.selectedScene.name)
-            put("sceneConfidence", sceneConf?.toDouble() ?: JSONObject.NULL)
-            put("minimumSceneConfidence", auto.minimumSceneConfidence.toDouble())
-            put("sceneConfidenceOk", sceneOk)
-            put("bambooExperimentalAutoAction", auto.bambooExperimentalAutoAction)
-            put("bambooLockActive", false)
             put("restrictPackages", auto.restrictPackages)
             put("allowedPackages", JSONArray(auto.allowedPackages.sorted()))
             put("foregroundPackage", fg?.packageName ?: JSONObject.NULL)
@@ -385,9 +334,8 @@ class SystemExecutor @Inject constructor(
                 "foregroundSource",
                 if (needsA11y) "accessibility" else "accessibility_probe_for_package_gate",
             )
-            put("lastAutomationDecision", status.lastAutomationDecision ?: JSONObject.NULL)
             put("maxActionsPerSecond", auto.maxActionsPerSecond)
-            put("canDispatchLikely", blockers.isEmpty())
+            put("canDispatchLikely", false)
             put("blockers", JSONArray(blockers))
         }
     }

@@ -56,18 +56,6 @@ enum class OverlayTheme {
 /** 悬浮窗内容排布方向。 */
 enum class OverlayOrientation { HORIZONTAL, VERTICAL }
 
-/** 游戏档案 ID；当前仅支持《火崽崽奇妙屋》。 */
-enum class GameProfileId { HUO_ZAI_ZAI_WONDER_HOUSE }
-
-/**
- * 赛季 ID。
- *
- * 枚举序与 C++ `scene` 参数一致：
- * `SWEET_FACTORY = 0`，`BAMBOO_BOOKSTORE = 1`，`SEA_SALT_LIVING_ROOM = 2`。
- * 三赛季共用同一套算法引擎与比例坐标体系，差异只在赛季参数。
- */
-enum class SceneId { SWEET_FACTORY, BAMBOO_BOOKSTORE, SEA_SALT_LIVING_ROOM }
-
 /**
  * 截图后端。
  *
@@ -97,25 +85,6 @@ enum class UpdateChannel { STABLE, BETA }
  * [AUTO]：默认优先 Gitee，不可达时回退 GitHub。
  */
 enum class UpdateSourcePreference { AUTO, PREFER_GITEE, PREFER_GITHUB }
-
-/**
- * 算法选择方式。
- *
- * [AUTO] 取兼容的最新官方包；[MANUAL] 钉选已安装版本。
- */
-enum class AlgorithmSelectionMode { AUTO, MANUAL }
-
-/** 算法发布通道，与应用 [UpdateChannel] 相互独立。 */
-enum class AlgorithmChannel { STABLE, BETA }
-
-/**
- * 玩家水平基准策略。
- *
- * - [FIXED_RATIO]：使用配置的固定 X 比例
- * - [DETECT_ONCE]：启动后检测一次并锁定
- * - [CONTINUOUS]：持续跟随检测结果
- */
-enum class PlayerReferenceMode { FIXED_RATIO, DETECT_ONCE, CONTINUOUS }
 
 /**
  * MCP 权限级别（从紧到松）。
@@ -156,28 +125,6 @@ enum class McpToolPolicy {
 }
 
 /**
- * 稳定障碍标识。
- *
- * 设置过滤、C++ 位掩码、报告与赛季过滤器共用此集合。
- * 增删时必须同步 Kotlin 枚举、JNI 位、C++ Kind 与标注工具。
- *
- * 命名与算法引擎 / 研究版 kind 对齐（如 GREEN_BOTTLE）。
- * 枚举序：Native Kind = ObstacleKind.ordinal + 1（0 保留给 PLAYER）。
- */
-enum class ObstacleKind {
-    GREEN_BOTTLE,
-    CAKE_STRUCTURE,
-    HANGING_SPIKE,
-    PIT,
-    PANDA_STATUE,
-    BAMBOO_GAP,
-    HANGING_BRUSH,
-    SAND_CASTLE,
-    HANGING_ANCHOR,
-    SEA_PIT,
-}
-
-/**
  * 应用主题配置。
  *
  * 可在设置中临时预览；保存后写入 DataStore。
@@ -201,7 +148,8 @@ data class ThemeConfig(
  * 可预览。真正创建/更新窗口由 `OverlayController` 在主线程完成。
  */
 data class OverlayConfig(
-    val enabled: Boolean = true,
+    /** Clean Base：悬浮窗默认 OFF，需用户在设置页显式开启。 */
+    val enabled: Boolean = AppConfig.OVERLAY_DEFAULT_ENABLED,
     /** 产品默认调试 HUD：首装与缺字段回退；用户已保存样式不被迁移改写。 */
     val style: OverlayStyle = OverlayStyle.DEBUG_HUD,
     val theme: OverlayTheme = OverlayTheme.FOLLOW_APP,
@@ -242,44 +190,6 @@ data class ViewportConfig(
 }
 
 /**
- * 单赛季视觉阈值（用户可调部分）。
- *
- * 更细的算法参数见声明式 [top.azek431.hzzs.domain.vision.AlgorithmRuntimeProfile]，
- * 两者职责不同：本结构偏“用户设置”，算法包偏“发布参数”。
- */
-data class VisionThresholds(
-    /** Native 检测器围绕该工作宽度选择自适应步长。 */
-    val workWidth: Int = 384,
-    val minimumConfidence: Float = 0.72f,
-    val stableFrames: Int = 2,
-    val playerReferenceMode: PlayerReferenceMode = PlayerReferenceMode.FIXED_RATIO,
-    /** 固定玩家水平参考，视口归一化 X。 */
-    val fixedPlayerXRatio: Float = 0.185f,
-    /**
-     * 判定「障碍已完全落在玩家身后」时的水平容差（视口归一化）。
-     * 运行时用障碍 **右缘** 与玩家左缘比较，重叠/贴身仍可触发；仅整块障碍在身后才丢弃。
-     */
-    val behindPlayerMarginRatio: Float = 0.018f,
-    /**
-     * 评估用边界容差（相对玩家宽度）。
-     * **不是**准确率承诺，仅用于数据集工具。
-     */
-    val boundaryTolerancePlayerWidthRatio: Float = 0.05f,
-)
-
-/**
- * 单赛季配置。
- *
- * @property disabledObstacles 空集合表示全部障碍类别启用
- */
-data class SceneConfig(
-    val sceneId: SceneId,
-    val enabled: Boolean = true,
-    val disabledObstacles: Set<ObstacleKind> = emptySet(),
-    val thresholds: VisionThresholds = VisionThresholds(),
-)
-
-/**
  * 自动操作配置。
  *
  * 默认关闭。导入/迁移不得静默开启。
@@ -297,13 +207,6 @@ data class AutomationConfig(
      */
     val gestureBackend: GestureBackend = GestureBackend.AUTO,
     /**
-     * legacy：竹影书屋实验锁字段，仅保留 schema/配置兼容。
-     *
-     * **运行时、UI、MCP 门控均不再读取本字段**；自动操作对全部场景共用总开关。
-     * 外部摄入 harden 仍可收敛，避免旧配置误导导入预览。
-     */
-    val bambooExperimentalAutoAction: Boolean = false,
-    /**
      * 是否启用前台包名门控。
      * 默认 false：任意前台包均可（仍须所选手势后端可用 + 其它门控）。
      * 开启后仅 [allowedPackages] 内的包可派发手势；须用户在设置中明确打开。
@@ -315,30 +218,7 @@ data class AutomationConfig(
      */
     val allowedPackages: Set<String> = SUGGESTED_PACKAGES,
     val maxActionsPerSecond: Int = 4,
-    /**
-     * 最低场景置信度门控。
-     *
-     * 默认 0.55：海盐客厅在弱地面 + FIXED_RATIO 玩家框时 scene_conf 常在 ~0.58，
-     * 若设 0.82 会系统性挡住（「看得见框却从不点」）；其它场景 conf 本就 ≥0.85，
-     * 0.55 不会造成空点（无候选时本就进不了 plan）。设置页滑条 0.5…1.0 可收紧。
-     */
-    val minimumSceneConfidence: Float = 0.55f,
     val retryLimit: Int = 1,
-    /** 相对玩家宽度的触发距离（甜甜圈，对齐历史 main 规划器）。 */
-    val sweetTriggerDistancePlayerWidths: Float = 1.50f,
-    /** 相对玩家宽度的触发距离（竹影）。 */
-    val bambooTriggerDistancePlayerWidths: Float = 1.35f,
-    /**
-     * 相对玩家宽度的触发距离（海盐客厅）。
-     * 酱油脚本按设计分辨率在较远 x 就点（约屏宽 0.3+），FIXED 玩家宽约 0.05，
-     * 1.4 倍仅 ~0.07 屏宽会导致「框已稳、永远 no_candidate」。默认放宽到约 5 倍玩家宽。
-     */
-    val seaSaltTriggerDistancePlayerWidths: Float = 5.0f,
-    /**
-     * 运行时根据近障碍间隙缓升/缓降触发距离（玩家宽度倍数），并节流写回本配置。
-     * 默认开启；关闭后仅使用上方固定倍数。不改变自动化总开关与其它门控。
-     */
-    val autoAdjustTriggerDistance: Boolean = true,
     /**
      * 自动复活（与 [enabled] 障碍自动操作**独立**）。
      *
@@ -437,7 +317,6 @@ data class DeveloperConfig(
     val saveDebugFrames: Boolean = false,
     val showCoordinateGrid: Boolean = false,
     val frameRateLimit: Int = 60,
-    val nativeBenchmarkIterations: Int = 200,
     /** 写入 ring buffer / Logcat 的最低级别；关闭开发者时 DEBUG 以下仍被压制。 */
     val logLevel: AppLogLevel = AppLogLevel.INFO,
     /**
@@ -445,12 +324,6 @@ data class DeveloperConfig(
      * 在开发者选项「调试」分组调节。
      */
     val logRingCapacity: Int = 800,
-    /** 阶段耗时细分（每帧多 ~5-10μs 计时开销）。 */
-    val enableStageTiming: Boolean = false,
-    /** 多点找色中间数据（每帧 ~几百字节诊断，HUD 可叠加搜索区/命中点）。 */
-    val enableMulticolorDiagnostic: Boolean = false,
-    /** 过滤原因追踪（被剔除检测写入 ring，HUD 叠加虚线框）。 */
-    val enableFilterTrace: Boolean = false,
 )
 
 /** 首次引导与免责声明接受状态。 */
@@ -473,22 +346,6 @@ data class UpdateConfig(
 )
 
 /**
- * 算法包选择与更新策略。
- *
- * 选择模式、通道与手动钉选属于可保存配置；
- * 下载/检查是即时任务，不写入本结构。
- * 手动下载的算法不会在“保存设置”前自动激活。
- */
-data class AlgorithmConfig(
-    val selectionMode: AlgorithmSelectionMode = AlgorithmSelectionMode.AUTO,
-    /** 手动模式下钉选的算法包 ID；自动模式忽略。 */
-    val pinnedAlgorithmId: String? = null,
-    val channel: AlgorithmChannel = AlgorithmChannel.STABLE,
-    val autoCheck: Boolean = true,
-    val autoDownload: Boolean = false,
-)
-
-/**
  * 完整应用配置快照。
  *
  * DataStore schema 版本见 [CURRENT_SCHEMA]。
@@ -499,17 +356,13 @@ data class AppConfig(
     val schemaVersion: Int = CURRENT_SCHEMA,
     val theme: ThemeConfig = ThemeConfig(),
     val overlay: OverlayConfig = OverlayConfig(),
-    val gameProfile: GameProfileId = GameProfileId.HUO_ZAI_ZAI_WONDER_HOUSE,
-    val selectedScene: SceneId = DEFAULT_SELECTED_SCENE,
     val captureBackend: CaptureBackend = CaptureBackend.AUTO,
     val viewport: ViewportConfig = ViewportConfig(),
-    val scenes: Map<SceneId, SceneConfig> = SceneId.entries.associateWith { SceneConfig(it) },
     val automation: AutomationConfig = AutomationConfig(),
     val mcp: McpConfig = McpConfig(),
     val developer: DeveloperConfig = DeveloperConfig(),
     val onboarding: OnboardingConfig = OnboardingConfig(),
     val update: UpdateConfig = UpdateConfig(),
-    val algorithm: AlgorithmConfig = AlgorithmConfig(),
 ) {
     companion object {
         /** DataStore 配置 schema 版本；迁移逻辑依赖此常量。 */
@@ -522,13 +375,23 @@ data class AppConfig(
         const val DISCLAIMER_VERSION = 1
 
         /**
-         * 首次安装、配置重置与运行时回退时的默认赛季。
+         * JinChanAI Clean Base 标记。
          *
-         * **唯一写死点**：变更产品默认赛季时只改这里，并跑设置/迁移相关单测。
-         * README / CLAUDE / AGENTS / PROGRESS 等文档不得再抄写具体赛季名。
+         * true 表示本分支已清退 HZZS 原游戏视觉算法（算法包 / 内置识别 / Tracker /
+         * 算法市场下载 / 原生视觉引擎均不存在），且未加入任何 JinChanAI 识别算法。
          */
-        /** 产品默认永远指向当前最新赛季（海盐客厅）。 */
-        val DEFAULT_SELECTED_SCENE: SceneId = SceneId.SEA_SALT_LIVING_ROOM
+        const val JINCHAN_CLEAN_BASE = true
+
+        /**
+         * 真实动作总闸（fail-closed）。
+         *
+         * Clean Base 阶段恒为 false：任何真实手势 / 点击 / 按键派发都必须在此被拒绝。
+         * 不得由设置、MCP 或导入配置改写。
+         */
+        const val ACTION_ENABLED = false
+
+        /** 悬浮窗默认开关；Clean Base 默认 OFF。 */
+        const val OVERLAY_DEFAULT_ENABLED = false
     }
 }
 
@@ -557,17 +420,9 @@ data class RuntimeStatus(
     val overlayVisible: Boolean = false,
     /** 期望显示悬浮窗但失败时的原因；可见或未尝试时为 null。 */
     val overlayBlockReason: OverlayBlockReason? = null,
-    val activeScene: SceneId = AppConfig.DEFAULT_SELECTED_SCENE,
     val activeBackend: CaptureBackend = CaptureBackend.AUTO,
     /** 解析后的有效手势注入后端（AUTO 展开后）；未运行时默认 AUTO。 */
     val activeGestureBackend: GestureBackend = GestureBackend.AUTO,
     val fps: Float = 0f,
-    val processingMs: Float = 0f,
-    val obstacleCount: Int = 0,
     val lastError: String? = null,
-    /**
-     * 最近一次自动操作决策摘要（skip / plan / dispatch_*）。
-     * 供运行页展示「为何没有动作」。
-     */
-    val lastAutomationDecision: String? = null,
 )

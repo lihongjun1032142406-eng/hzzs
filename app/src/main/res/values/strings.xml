@@ -52,10 +52,6 @@
     <!-- 设置分类 -->
     <string name="settings_cat_appearance_title">外观与显示</string>
     <string name="settings_cat_appearance_desc">主题、动态取色、字体与动效</string>
-    <string name="settings_cat_algorithm_title">算法库</string>
-    <string name="settings_cat_algorithm_desc">内置、捆绑与远端算法切换与更新</string>
-    <string name="settings_cat_detection_title">检测参数</string>
-    <string name="settings_cat_detection_desc">赛季、障碍开关与识别阈值</string>
     <string name="settings_cat_capture_title">截图与权限</string>
     <string name="settings_cat_capture_desc">截图后端与能力状态</string>
     <string name="settings_cat_overlay_title">悬浮窗</string>
@@ -92,12 +88,11 @@
     <string name="home_status_idle">分析未启动</string>
     <string name="home_hero_running">分析正在进行</string>
     <string name="home_hero_idle">准备开始分析</string>
-    <string name="home_hero_body">识别仅在本机完成。自动操作默认关闭；开启并完成风险确认后，分析运行中按门控规划手势（默认不限制前台应用）。</string>
+    <string name="home_hero_body">画面仅在本机处理。自动操作默认关闭；Clean Base 阶段真实动作总闸恒关，不会派发任何手势。</string>
     <string name="home_open_runtime_running">打开运行控制台</string>
     <string name="home_open_runtime">进入运行控制</string>
     <string name="home_config_section">当前生效配置</string>
     <string name="home_config_hint">此处显示已落盘配置；设置页需点「保存并应用」后才会更新此处。</string>
-    <string name="home_metric_scene">赛季</string>
     <string name="home_metric_capture">截图</string>
     <string name="home_metric_automation">自动操作</string>
     <string name="home_metric_mcp">MCP</string>
@@ -109,7 +104,7 @@
 
     <!-- 运行 -->
     <string name="runtime_title">运行控制台</string>
-    <string name="runtime_subtitle_default">启动视觉分析，按需启用自动操作</string>
+    <string name="runtime_subtitle_default">启动截图运行时</string>
     <string name="runtime_subtitle_arm">启动分析；自动操作开启后按门控规划手势</string>
     <string name="runtime_subtitle_auto">自动操作已开启：满足门控即可规划手势</string>
     <string name="runtime_hero_running">视觉分析运行中</string>
@@ -121,12 +116,10 @@
     <string name="runtime_chip_overlay_on">悬浮窗</string>
     <string name="runtime_chip_overlay_off">无悬浮窗</string>
     <string name="runtime_metric_fps">帧率</string>
-    <string name="runtime_metric_ms">耗时 ms</string>
-    <string name="runtime_metric_obstacles">障碍</string>
     <string name="runtime_stop">停止分析</string>
     <string name="runtime_start">开始分析</string>
     <string name="runtime_overlay_permission_title">缺少系统悬浮窗权限</string>
-    <string name="runtime_overlay_permission_body">分析可继续，但检测框与 HUD 无法显示。请在系统设置中允许「显示在其他应用上层」。应用内「显示悬浮窗」开关不能代替系统权限。</string>
+    <string name="runtime_overlay_permission_body">截图可继续，但状态 HUD 无法显示。请在系统设置中允许「显示在其他应用上层」。应用内「显示悬浮窗」开关不能代替系统权限。</string>
     <string name="runtime_overlay_permission_action">去开启悬浮窗权限</string>
     <string name="runtime_overlay_add_failed_title">悬浮窗创建失败</string>
     <string name="runtime_overlay_add_failed_body">系统拒绝添加悬浮窗（可能被厂商后台限制）。可尝试重新授权或重启应用。</string>
@@ -162,8 +155,6 @@
     <string name="onboarding_step_counter">%1$d/%2$d</string>
     <string name="onboarding_page0_title">认识 HZZS</string>
     <string name="onboarding_page0_subtitle">本地分析工具 · 默认低权限</string>
-    <string name="onboarding_page1_title">选择赛季</string>
-    <string name="onboarding_page1_subtitle">可随时在设置中更换</string>
     <string name="onboarding_page2_title">截图方式</string>
     <string name="onboarding_page2_subtitle">自动推荐永不升权</string>
     <string name="onboarding_page3_title">系统权限</string>
@@ -184,9 +175,6 @@
     <string name="onboarding_permissions_a11y_title">无障碍（仅自动操作）</string>
     <string name="onboarding_permissions_a11y_body">纯分析与画框不需要。仅在你启用自动操作时，才须在系统中开启本服务。</string>
     <string name="onboarding_permissions_capture_note">录屏/截图授权会在你第一次点「开始分析」时由系统弹出，无需在此步骤处理。</string>
-    <string name="onboarding_season_section">当前赛季</string>
-    <string name="onboarding_season_desc">各赛季共享视口比例坐标，但障碍贴图与识别规则独立。</string>
-    <string name="onboarding_season_hint">默认赛季与产品配置一致；选错了可在设置 → 检测参数中更换。</string>
     <string name="onboarding_capture_section">截图方式</string>
     <string name="onboarding_capture_desc">推荐「自动推荐」或「屏幕录制」。AUTO 只走低权限公开接口，不会自动请求 Root 或 Shell。</string>
     <string name="onboarding_capture_recommended">推荐</string>
@@ -206,7 +194,6 @@
     <string name="onboarding_automation_pending_risk">请在对话框中完成风险确认（倒计时结束后可确认）</string>
     <string name="onboarding_finish_section">配置摘要</string>
     <string name="onboarding_finish_desc">确认后保存并进入首页</string>
-    <string name="onboarding_finish_scene">赛季：%1$s</string>
     <string name="onboarding_finish_capture">截图：%1$s</string>
     <string name="onboarding_finish_theme">主题：%1$s</string>
     <string name="onboarding_finish_overlay">悬浮窗：%1$s</string>
@@ -219,19 +206,17 @@
     <string name="onboarding_risk_wait">请等待 %1$ds</string>
     <string name="onboarding_risk_confirm">确认开启</string>
     <string name="onboarding_risk_keep_off">保持关闭</string>
-    <string name="scene_sweet_factory">甜甜圈赛季</string>
-    <string name="scene_bamboo_bookstore">竹影书屋赛季</string>
 
     <!-- 关于 / 赞赏 -->
     <string name="about_title">关于</string>
-    <string name="about_tagline">本地识别 · 多赛季障碍分析 · 高度自定义</string>
+    <string name="about_tagline">本地截图 · 隐私优先 · Clean Base</string>
     <string name="about_version_chip">版本 %1$s</string>
     <string name="about_unlock_remaining">再点击 %1$d 次即可开启开发者设置</string>
     <string name="about_unlock_done">开发者设置已开启</string>
     <string name="about_developer_entry">开发者设置</string>
-    <string name="about_developer_entry_sub">与设置共用同一开发者页：诊断、调试帧、坐标网格与 Native Benchmark</string>
+    <string name="about_developer_entry_sub">与设置共用同一开发者页：诊断、调试帧、坐标网格与系统指针位置</string>
     <string name="about_project_title">项目说明</string>
-    <string name="about_project_body">HZZS 用于火崽崽奇妙屋的本地画面分析。截图与识别默认仅在设备本地完成，不上传画面。自动操作高风险且默认关闭。</string>
+    <string name="about_project_body">HZZS 提供本地截图与设备能力运行时。画面默认仅在设备本地处理，不上传。Clean Base 分支不包含任何游戏视觉识别算法；自动操作高风险且默认关闭。</string>
     <string name="about_disclaimer_title">免责声明</string>
     <string name="about_disclaimer_body">第三方技术研究工具，与游戏及平台官方无关。请遵守规则与法律，并自行承担识别误差、自动操作与权限配置风险。</string>
     <string name="about_support_title">支持开发</string>
@@ -404,8 +389,6 @@
     <string name="dev_pointer_location_busy">正在写入系统设置…</string>
     <string name="dev_open_log_viewer">查看运行日志</string>
     <string name="dev_open_log_viewer_subtitle">折叠筛选、暂停实时、单条复制；级别 / 标签 / 关键字</string>
-    <string name="dev_open_algorithm_pipeline">算法执行流程</string>
-    <string name="dev_open_algorithm_pipeline_subtitle">激活阶段、Native 配置与最近一帧摘要</string>
     <string name="dev_force_capture_backend_title">强制截图后端</string>
     <string name="dev_force_capture_backend_desc">仅诊断用。选择「跟随设置」恢复普通用户配置。AUTO 仍不升权。</string>
     <string name="dev_force_capture_follow">跟随设置</string>
@@ -415,25 +398,9 @@
     <string name="dev_log_level_title">日志级别</string>
     <string name="dev_log_level_desc">控制 Logcat 与内存 ring buffer 的最低级别；关闭开发者时 DEBUG 以下仍被压制。调算法时请开 DEBUG，可看到 algo.frame / algo.det / algo.track / algo.decision（状态变化或约每 12 帧一条，诊断导出含最近 32 帧）。</string>
     <string name="dev_log_ring_capacity">日志缓冲区容量：%d 条（重启丢失）</string>
-    <string name="dev_algorithm_diagnostics_title">算法诊断</string>
-    <string name="dev_algorithm_diagnostics_desc">细粒度算法执行过程追踪。以下开关会增加运行时开销，仅供调试，日常请保持关闭。</string>
-    <string name="dev_algorithm_diagnostics_warning_title">性能警告</string>
-    <string name="dev_algorithm_diagnostics_warning">开启后会增加每帧耗时与内存占用，偶发帧率波动属正常；调试完成后请关闭。</string>
-    <string name="dev_enable_stage_timing">阶段耗时细分</string>
-    <string name="dev_enable_stage_timing_subtitle">拆分 JNI / 主检测 / 后过滤 / 归一化 4 段耗时（每帧多 ~5–10μs）。</string>
-    <string name="dev_enable_multicolor_diagnostic">多点找色诊断</string>
-    <string name="dev_enable_multicolor_diagnostic_subtitle">每模板命中/拒绝原因写入 ring，HUD 可叠加搜索区与命中点。</string>
-    <string name="dev_enable_filter_trace">过滤原因追踪</string>
-    <string name="dev_enable_filter_trace_subtitle">被尺寸窗剔除的检测写入 ring，HUD 叠加半透明虚线框。</string>
     <string name="dev_frame_rate_title">识别帧率上限</string>
     <string name="dev_frame_rate_desc">完成驱动取帧下运行时暂不消费。</string>
     <string name="dev_frame_rate_current">当前值：%d（未生效）</string>
-    <string name="dev_native_benchmark_title">Native 自检</string>
-    <string name="dev_native_benchmark_desc">在合成帧上跑 JNI + C++ 冒烟基准，不读取真实截图。</string>
-    <string name="dev_native_benchmark_iterations">迭代次数：%d</string>
-    <string name="dev_run_benchmark">运行 JNI + C++ 合成帧自检</string>
-    <string name="dev_benchmark_success">%1$d 次 · 平均 %2$.3f ms · P50 %3$.3f ms · P95 %4$.3f ms</string>
-    <string name="dev_benchmark_failed">自检失败：%s</string>
     <string name="dev_diagnostics_title">诊断导出</string>
     <string name="dev_diagnostics_desc">包含版本、机型、配置摘要、算法激活、运行态与最近日志；不含 Bearer 与调试帧像素。</string>
     <string name="dev_export_chooser">导出诊断摘要</string>
@@ -454,7 +421,7 @@
     <string name="log_viewer_filter_section">筛选</string>
     <string name="log_viewer_filter_collapsed_hint">点开设置级别、标签与排序</string>
     <string name="log_viewer_search_label">搜索消息 / 标签</string>
-    <string name="log_viewer_search_placeholder">例如 algorithm、failed、overlay</string>
+    <string name="log_viewer_search_placeholder">例如 capture、failed、overlay</string>
     <string name="log_viewer_min_level">最低级别</string>
     <string name="log_viewer_level_all">全部</string>
     <string name="log_viewer_tags">标签（Top）</string>
@@ -498,25 +465,6 @@
     <string name="mcp_access_log_empty_viewer">暂无访问记录。连接客户端并调用工具后会出现在此。</string>
 
     <!-- 算法流程页 -->
-    <string name="algorithm_pipeline_title">算法执行流程</string>
-    <string name="algorithm_pipeline_subtitle">会话阶段 · 最近一帧</string>
-    <string name="algorithm_pipeline_refreshed">已刷新</string>
-    <string name="algorithm_pipeline_copied">算法流程摘要已复制</string>
-    <string name="algorithm_pipeline_share_chooser">分享算法流程</string>
-    <string name="algorithm_pipeline_share_failed">分享失败：%s</string>
-    <string name="algorithm_pipeline_open_logs">打开运行日志（algorithm）</string>
-    <string name="algorithm_pipeline_context">当前上下文</string>
-    <string name="algorithm_pipeline_stages">执行阶段</string>
-    <string name="algorithm_pipeline_last_frame">最近一帧分析</string>
-    <string name="algorithm_pipeline_no_frame">尚未产生分析帧。请启动视觉分析后回到本页。</string>
-    <string name="algorithm_pipeline_hint">阶段在「保存算法设置 / 启动分析」时更新；最近一帧在分析运行时刷新。不含检测框像素与密钥。更细日志见「运行日志」并筛选 algorithm。</string>
-    <string name="algorithm_pipeline_status_idle">待执行</string>
-    <string name="algorithm_pipeline_status_running">进行中</string>
-    <string name="algorithm_pipeline_status_success">成功</string>
-    <string name="algorithm_pipeline_status_warning">警告</string>
-    <string name="algorithm_pipeline_status_failed">失败</string>
-    <string name="algorithm_pipeline_status_skipped">跳过</string>
-    <string name="algorithm_pipeline_refresh">刷新</string>
 
     <!-- 诊断导出增强 -->
     <string name="dev_diagnostics_preview_hint">导出前可先复制；内容已脱敏，仍请勿发往不可信渠道。</string>

@@ -9,8 +9,7 @@ import top.azek431.hzzs.service.vision.createVisionAnalysisChannel
  * 进程级 Application 入口：启用 Hilt，并安装诊断用未捕获异常钩子。
  *
  * 不承载业务状态或 UI 导航；业务单例由 Hilt 模块在需要时创建。
- * 算法捆绑预装由 [top.azek431.hzzs.core.algorithm.AlgorithmCatalogController.ensureBundledSeeded]
- * 在首次 bind / 刷新目录时幂等执行。
+ * Clean Base：不预装、不下载、不激活任何算法包。
  * 异常钩子只写 [AppLog]，不上传、不弹窗。
  */
 @HiltAndroidApp
