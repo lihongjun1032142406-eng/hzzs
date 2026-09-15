@@ -19,23 +19,16 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Bootstrap Android SDK command-line tools
+      # ubuntu-24.04 already provides Android SDK Platform android-37.0,
+      # Build-tools 37.0.0 and ANDROID_HOME/ANDROID_SDK_ROOT.
+      # Do not replace that SDK with a fresh command-line-tools-only root.
+      - name: Verify Android SDK 37
         run: |
           set -euo pipefail
-          ANDROID_HOME="$RUNNER_TEMP/android-sdk"
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          curl --fail --location --retry 3 --retry-delay 2 \
-            --output "$RUNNER_TEMP/commandlinetools.zip" \
-            "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
-          unzip -q "$RUNNER_TEMP/commandlinetools.zip" -d "$ANDROID_HOME/cmdline-tools"
-          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
-            "platform-tools" "platforms;android-37" "build-tools;37.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          test -d "$ANDROID_HOME/platforms/android-37"
+          test -d "$ANDROID_HOME/build-tools/37.0.0"
       - name: Verify Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
       - name: Install Python verification dependencies
