@@ -11,6 +11,7 @@
 - `executor/`：按 feature 分组的工具执行器（见 [`executor/CLAUDE.md`](executor/CLAUDE.md)）。
 - `McpAccessLog`：进程内访问日志 ring（method/工具/状态/耗时/远端；**无** Token/参数）。
 - `McpUiBridge`：审批对话框与导航；停止时拒绝挂起审批。
+- H6-C4D 复用资源 `app://rikka/observation/v1/latest` 与工具 `submit_rikka_decision_v1`；只读配对观测/验证决策，无第二服务、C3 或执行。
 - `McpSessionManager` / `McpEventBus` / `McpLanAddresses` / `McpProfileStore` / `McpSettingsPatch` 等支撑组件。
 
 ## 入口

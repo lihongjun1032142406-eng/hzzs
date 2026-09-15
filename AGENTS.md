@@ -94,6 +94,8 @@ Shop 只在稳定 `inGame && SHOP_OPEN` 运行；Board 只在稳定 `inGame && B
 H6-A 的 `data/jinchan/action` 仅为 shadow-only 语义动作契约和纯 fail-closed 安全门：默认关闭，只产出
 Approved/Rejected 能力值；无坐标解析、手势传输或真实输入可达性，禁止提前进入 H6-B/H6-C。
 
+H6-C4D 在同一帧迭代内完成 reconciliation → 单次 ledger snapshot → ownership → JoinedState，并通过既有 MCP 提供最新 `RikkaObservationV1` 与 `RikkaDecisionV1` 接收/严格配对验证。Rikka 是唯一高层策略大脑；验证结果就地终止，不调用 C3、不执行真实动作、不建立第二套传输。
+
 ```text
 FrameSource → VisionRuntimeController（完成驱动取帧；HUD 显示时临时隐身）
   → NativeVisionEngine (JNI)  【算法：只算 Detection 数据，不绘制】

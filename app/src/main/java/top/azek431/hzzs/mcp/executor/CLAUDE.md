@@ -16,7 +16,7 @@ MCP 工具执行的**按 feature 分组**层。每个 [top.azek431.hzzs.mcp.exec
 | 文件 | 职责 | 工具数 |
 |---|---|---|
 | `ToolExecutor.kt` | 接口（`toolNames: Set<String>` + `suspend fun execute(tool, arguments)`） | — |
-| `ToolExecutorBindings.kt` | Hilt `@IntoSet` 绑定 7 个执行器 | — |
+| `ToolExecutorBindings.kt` | Hilt `@IntoSet` 注册执行器 | — |
 | `RuntimeControlExecutor.kt` | 运行时控制：start/stop/restart/cancel/preview/save/patch 等 | 8 |
 | `SettingsWriteExecutor.kt` | 设置写入：scene/obstacle/threshold/theme/overlay/developer/automation/capture/gesture 等 | 15 |
 | `AlgorithmExecutor.kt` | 算法包：list/active/pipeline/set_active/refresh/download/upgrade | 7 |
@@ -24,8 +24,9 @@ MCP 工具执行的**按 feature 分组**层。每个 [top.azek431.hzzs.mcp.exec
 | `ProfileExecutor.kt` | 配置 profile：save/load/list/delete | 4 |
 | `DebugFrameExecutor.kt` | 调试帧：list/clear/get/capture | 4 |
 | `SystemExecutor.kt` | 系统：version/metrics/check_update/inspect/permissions/open_system_settings/export 等 | 12 |
+| `RikkaBridgeExecutor.kt` | RikkaDecisionV1 配对验证并终止（无 C3/执行） | 1 |
 
-合计 58 工具，与 [top.azek431.hzzs.mcp.McpToolCatalog] 保持三向一致（catalog / executorIndex / 工具目录 JSON）。
+工具总数以当前 catalog 为准，并与 [top.azek431.hzzs.mcp.McpToolCatalog] 保持三向一致（catalog / executorIndex / 工具目录 JSON）。
 
 ## 数据流
 

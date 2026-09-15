@@ -8,6 +8,7 @@ import org.json.JSONObject
  */
 object McpToolLabels {
     private val titles: Map<String, String> = mapOf(
+        "submit_rikka_decision_v1" to "提交 Rikka 决策 V1",
         "get_status" to "读取运行状态",
         "get_runtime_snapshot" to "读取运行态快照",
         "inspect" to "一键诊断聚合",
@@ -70,6 +71,7 @@ object McpToolLabels {
 
     /** 审批用一句话摘要，包含关键参数（不记 Token/完整参数体，符合访问日志约束）。 */
     fun summaryZh(toolName: String, arguments: JSONObject): String = when (toolName) {
+        "submit_rikka_decision_v1" -> "Rikka 请求提交与最新观测精确配对的决策（仅验证）"
         "save_settings" -> "AI 请求永久保存应用设置"
         "preview_settings" -> "AI 请求临时预览应用设置"
         "patch_settings" -> "AI 请求局部修改设置"
