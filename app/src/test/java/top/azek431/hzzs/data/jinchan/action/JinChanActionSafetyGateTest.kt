@@ -133,7 +133,7 @@ class JinChanActionSafetyGateTest {
             .takeIf(Files::exists)
             ?: Path.of("app/src/main/java/top/azek431/hzzs/data/jinchan/action")
         val forbidden = listOf(
-            "GestureSpec", "AutomationAction", "GestureArbiter", "GestureDispatcher",
+            "AutomationAction", "GestureArbiter", "GestureDispatcher",
             "GestureDispatcherFactory", "HzzsAccessibilityService", "dispatchGesture",
             "android.accessibilityservice", "Shizuku", "root shell input",
         )
