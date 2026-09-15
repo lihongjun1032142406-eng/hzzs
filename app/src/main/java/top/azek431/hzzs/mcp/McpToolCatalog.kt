@@ -75,6 +75,13 @@ object McpToolCatalog {
             required = listOf("decision"),
         ),
         McpToolDescriptor(
+            name = "get_rikka_observation_v1",
+            description = "只读读取最新已发布的 RikkaObservationV1（与 app://rikka/observation/v1/latest 同一份 immutable publication）；" +
+                "无观测时 fail-closed 返回 available=false / NO_RIKKA_OBSERVATION",
+            risk = McpToolRisk.READ,
+            inputSchema = emptyObjectSchema(),
+        ),
+        McpToolDescriptor(
             name = "get_status",
             description = "读取截图运行时状态（是否运行、后端、FPS、截图就绪等）",
             risk = McpToolRisk.READ,
