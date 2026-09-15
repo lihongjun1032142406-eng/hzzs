@@ -60,6 +60,9 @@ HZZS（火崽崽奇妙屋）是本地 Android 画面分析工具：截图、C++ 
   observation；Shop 必须满足稳定 `inGame && SHOP_OPEN`，Board 必须满足稳定 `inGame && BOARD_OR_COMBAT`
   及 Scene/Banner/Damage fail-closed 门控。Gold 的 200 仅为 dataset risk filter；Board Identity、Bench 与动作仍不可达。
 
+- JinChan H6-A 是 shadow-only 语义边界：`data/jinchan/action` 只验证 H1-H5/调用方显式证据，默认关闭，
+  不得依赖 `GestureSpec`、自动操作传输、Accessibility/Root/Shizuku，也不得生成最终屏幕坐标。
+
 - 取帧为**完成驱动**：上一轮分析结束后再 `nextFrame`；不按固定 FPS 主动丢帧（开发者 `frameRateLimit` 字段可保留，但不得假定仍被消费）。
 - MediaProjection 为 CONFLATED + 最新帧；HUD 显示时临时隐身、等一帧提交，并对 MediaProjection/AUTO 排空可能含旧合成层的一帧。
 - 近似轮廓与像素轮廓不得声称已迁移 C++/JNI，除非协议与测试同步落地。

@@ -11,6 +11,8 @@
 
 ### 新增
 
+- **JinChan H6-A 语义动作安全门**：新增 Buy/Move/Sell/Refresh/BuyXp 的 pixel-free sealed contract、不可变证据上下文、稳定拒绝原因与纯 fail-closed projector；默认关闭，严格校验包名、session/序列新鲜度、UI/场景、H5 ownership 与 reconciliation，且不包含坐标解析或真实输入传输。
+
 - **JinChan H4-B Board Occupancy**：在 H1/H2/H3/H4-A 同一帧租约上接入冻结的 4×7 `HEX_V2_FROZEN` 几何、V8 120 维占用模型、Scene Truth Gate 与 Banner/Damage 污染门控；发布 pixel-free typed Board observation 并保持 SET/HOLD/CLEAR，UNKNOWN 不伪装为空。Bench、Board Identity、Decision 与 Action 仍未启用。
 
 - **JinChan H4-A HUD + Shop**：在 H1/H2/H3 同一帧租约与 `frameSeq` 上迁移 LEVEL/EXP/GOLD typed observation、冻结的五槽 Shop/name-band/content gate 与精确身份解析契约；Gold 保持 best-effort 且只在 clean + ceiling 风险过滤后可信，Shop 仅在稳定 `inGame && SHOP_OPEN` 且完整构建时可用，Board/Bench 与所有动作仍保持不可达。

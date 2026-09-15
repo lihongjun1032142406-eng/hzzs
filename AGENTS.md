@@ -91,6 +91,9 @@ JinChan H4-A/H4-B 复用同一帧链路生成 LEVEL/EXP/GOLD、五槽 Shop 与 2
 Shop 只在稳定 `inGame && SHOP_OPEN` 运行；Board 只在稳定 `inGame && BOARD_OR_COMBAT` 及 Scene/Banner/Damage
 门控通过后 SET，否则按冻结语义 HOLD/CLEAR。Gold 保持 best-effort。Board Identity/Bench/Decision/Action 仍不可达。
 
+H6-A 的 `data/jinchan/action` 仅为 shadow-only 语义动作契约和纯 fail-closed 安全门：默认关闭，只产出
+Approved/Rejected 能力值；无坐标解析、手势传输或真实输入可达性，禁止提前进入 H6-B/H6-C。
+
 ```text
 FrameSource → VisionRuntimeController（完成驱动取帧；HUD 显示时临时隐身）
   → NativeVisionEngine (JNI)  【算法：只算 Detection 数据，不绘制】
