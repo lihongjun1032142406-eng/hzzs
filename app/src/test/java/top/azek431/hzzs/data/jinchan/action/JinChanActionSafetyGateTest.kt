@@ -140,7 +140,9 @@ class JinChanActionSafetyGateTest {
         val sources = Files.walk(root).use { paths ->
             paths.filter { Files.isRegularFile(it) && it.extension == "kt" }.map(Files::readString).toList()
         }
-        forbidden.forEach { token -> assertEquals(false, sources.any { token in it }, "forbidden production token: $token") }
+        forbidden.forEach { token ->
+            assertEquals("forbidden production token: $token", false, sources.any { token in it })
+        }
     }
 
     private fun gate(intent: JinChanActionIntent, context: JinChanActionContext) =
