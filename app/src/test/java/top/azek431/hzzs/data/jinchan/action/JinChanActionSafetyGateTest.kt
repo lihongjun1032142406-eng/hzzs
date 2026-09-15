@@ -2,10 +2,10 @@ package top.azek431.hzzs.data.jinchan.action
 
 import java.nio.file.Files
 import java.nio.file.Path
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import kotlin.io.path.extension
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
 import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
 import top.azek431.hzzs.data.jinchan.ledger.JinChanOwnershipProjector
 import top.azek431.hzzs.data.jinchan.ledger.JinChanUnitLedger
@@ -198,4 +198,9 @@ class JinChanActionSafetyGateTest {
         100,
         List(5) { index -> ShopSlotObservation(index, if (index == 1) second else ShopContentType.HERO_CARD) },
     )
+
+    private inline fun <reified T> assertIs(value: Any): T {
+        assertTrue(value is T)
+        return value as T
+    }
 }
