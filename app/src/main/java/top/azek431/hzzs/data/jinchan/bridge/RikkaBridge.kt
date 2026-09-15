@@ -4,6 +4,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import org.json.JSONArray
 import org.json.JSONObject
+import top.azek431.hzzs.core.logging.AppLog
 import top.azek431.hzzs.data.jinchan.action.JinChanActionIntent
 import top.azek431.hzzs.data.jinchan.decision.JinChanJoinedStateSnapshot
 import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
@@ -98,6 +99,10 @@ sealed interface RikkaDecisionValidationResult {
 }
 
 data class PairedRikkaEvidence(val observation: RikkaObservationV1, val joinedState: JinChanJoinedStateSnapshot)
+data class PairedRikkaValidation(
+    val result: RikkaDecisionValidationResult,
+    val pairedEvidence: PairedRikkaEvidence?,
+)
 
 /** Latest-only bridge store. Validation exclusively reads the immutable snapshot paired at publication. */
 @Singleton
@@ -105,36 +110,54 @@ class RikkaBridgeStore @Inject constructor() {
     @Volatile private var latest: PairedRikkaEvidence? = null
 
     @Synchronized fun publish(joined: JinChanJoinedStateSnapshot): PairedRikkaEvidence =
-        PairedRikkaEvidence(RikkaObservationMapper.from(joined), joined).also { latest = it }
+        PairedRikkaEvidence(RikkaObservationMapper.from(joined), joined).also {
+            latest = it
+            RikkaDryRunDiagnostics.observationPublished()
+            AppLog.i("jinchan-c5", "event=OBSERVATION_PUBLISHED sessionId=${joined.sessionId.value} evidenceSequence=${joined.evidenceSequence} ownershipRevision=${joined.ownershipRevision}")
+        }
 
     fun latest(): PairedRikkaEvidence? = latest
 
-    fun validate(decision: RikkaDecisionV1): RikkaDecisionValidationResult {
-        val paired = latest ?: return RikkaDecisionValidationResult.Rejected(RikkaDecisionRejection.NO_PAIRED_OBSERVATION)
+    @Synchronized fun validate(decision: RikkaDecisionV1): RikkaDecisionValidationResult =
+        validatePaired(decision).result
+
+    /** Atomically binds validation to the exact immutable publication consumed by C5. */
+    @Synchronized fun validatePaired(decision: RikkaDecisionV1): PairedRikkaValidation {
+        RikkaDryRunDiagnostics.decisionReceived()
+        val paired = latest ?: return rejected(RikkaDecisionRejection.NO_PAIRED_OBSERVATION, null)
         val expected = paired.observation.provenance
         if (decision.provenance != RikkaDecisionProvenance(expected.sessionId, expected.evidenceSequence, expected.ownershipRevision)) {
-            return RikkaDecisionValidationResult.Rejected(RikkaDecisionRejection.PROVENANCE_MISMATCH)
+            return rejected(RikkaDecisionRejection.PROVENANCE_MISMATCH, paired)
         }
-        return when (decision) {
+        val result = when (decision) {
             is RikkaDecisionV1.NoAction -> RikkaDecisionValidationResult.Terminated("NO_ACTION", decision.provenance)
             is RikkaDecisionV1.Blocked -> RikkaDecisionValidationResult.Terminated("BLOCKED", decision.provenance)
             is RikkaDecisionV1.Action -> {
                 val uid = when (val intent = decision.intent) {
                     is JinChanActionIntent.MoveUnit -> {
                         if (!top.azek431.hzzs.data.jinchan.ledger.JinChanUnitLedger.validLocation(intent.destination)) {
-                            return RikkaDecisionValidationResult.Rejected(RikkaDecisionRejection.INVALID_ACTION)
+                            return rejected(RikkaDecisionRejection.INVALID_ACTION, paired)
                         }
                         intent.uid
                     }
                     is JinChanActionIntent.SellUnit -> intent.uid
-                    else -> return RikkaDecisionValidationResult.Rejected(RikkaDecisionRejection.INVALID_ACTION)
+                    else -> return rejected(RikkaDecisionRejection.INVALID_ACTION, paired)
                 }
-                if (uid <= 0) return RikkaDecisionValidationResult.Rejected(RikkaDecisionRejection.INVALID_ACTION)
+                if (uid <= 0) return rejected(RikkaDecisionRejection.INVALID_ACTION, paired)
                 val matches = paired.joinedState.ownershipSnapshot.activeUnits.filter { it.uid == uid }
                 if (matches.size != 1) RikkaDecisionValidationResult.Rejected(RikkaDecisionRejection.UID_NOT_UNIQUE_ACTIVE)
                 else RikkaDecisionValidationResult.ValidatedAction(decision.intent, matches.single().location, decision.provenance)
             }
         }
+        if (result is RikkaDecisionValidationResult.Rejected) return rejected(result.reason, paired)
+        RikkaDryRunDiagnostics.decisionValidated(result)
+        return PairedRikkaValidation(result, paired)
+    }
+
+    private fun rejected(reason: RikkaDecisionRejection, paired: PairedRikkaEvidence?): PairedRikkaValidation {
+        RikkaDryRunDiagnostics.decisionRejected(reason)
+        AppLog.w("jinchan-c5", "event=DECISION_REJECTED reason=${reason.name}")
+        return PairedRikkaValidation(RikkaDecisionValidationResult.Rejected(reason), paired)
     }
 }
 
