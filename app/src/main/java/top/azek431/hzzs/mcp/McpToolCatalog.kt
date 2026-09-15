@@ -65,6 +65,16 @@ object McpToolCatalog {
 
     val tools: List<McpToolDescriptor> = listOf(
         McpToolDescriptor(
+            name = "submit_rikka_decision_v1",
+            description = "提交与最新 RikkaObservationV1 精确配对的决策；仅验证并终止，不请求 C3 或执行动作",
+            risk = McpToolRisk.WRITE,
+            inputSchema = objSchema(
+                properties = JSONObject().put("decision", stringProp("RikkaDecisionV1 JSON")),
+                required = listOf("decision"),
+            ),
+            required = listOf("decision"),
+        ),
+        McpToolDescriptor(
             name = "get_status",
             description = "读取截图运行时状态（是否运行、后端、FPS、截图就绪等）",
             risk = McpToolRisk.READ,
@@ -608,6 +618,11 @@ object McpToolCatalog {
     )
 
     val resources: List<McpResourceDescriptor> = listOf(
+        McpResourceDescriptor(
+            uri = "app://rikka/observation/v1/latest",
+            name = "Latest Rikka observation V1",
+            description = "最近一次有效 same-evidence JinChan joined state 的不可变 RikkaObservationV1",
+        ),
         McpResourceDescriptor("app://status", "status", "当前运行状态"),
         McpResourceDescriptor("app://settings/schema", "settings/schema", "设置 schema 摘要"),
         McpResourceDescriptor("app://settings/current", "settings/current", "当前完整设置"),

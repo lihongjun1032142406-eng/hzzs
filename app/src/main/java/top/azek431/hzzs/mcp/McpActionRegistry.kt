@@ -19,6 +19,7 @@ import top.azek431.hzzs.core.model.ThemePreset
 import top.azek431.hzzs.core.preferences.SettingsRepository
 import top.azek431.hzzs.data.vision.DebugFrameRecorder
 import top.azek431.hzzs.data.vision.VisionRuntimeController
+import top.azek431.hzzs.data.jinchan.bridge.RikkaBridgeStore
 import top.azek431.hzzs.platform.compat.SystemCapabilityAccess
 import top.azek431.hzzs.platform.compat.resolveEffectiveGestureBackend
 import top.azek431.hzzs.service.automation.HzzsAccessibilityService
@@ -58,6 +59,7 @@ class McpActionRegistry @Inject constructor(
     private val runtime: VisionRuntimeController,
     private val uiBridge: McpUiBridge,
     private val debugFrames: DebugFrameRecorder,
+    private val rikkaBridgeStore: RikkaBridgeStore,
     private val executors: @JvmSuppressWildcards Set<ToolExecutor>,
 ) : McpActionSurface {
     private val executorIndex: Map<String, ToolExecutor> = buildMap {
@@ -72,6 +74,8 @@ class McpActionRegistry @Inject constructor(
     }
 
     override suspend fun readResource(uri: String): JSONObject = when (uri) {
+        "app://rikka/observation/v1/latest" -> rikkaBridgeStore.latest()?.observation?.toJson()
+            ?: throw IllegalStateException("尚无有效 RikkaObservationV1")
         "app://status" -> runtime.status.value.toJson()
         "app://settings/current" -> JSONObject(settings.exportJsonRedacted(settings.current()))
         "app://settings/schema" -> settingsSchema()
@@ -389,4 +393,3 @@ internal fun top.azek431.hzzs.core.model.RuntimeStatus.toJson() = JSONObject().a
     put("actionEnabled", AppConfig.ACTION_ENABLED)
     put("cleanBase", AppConfig.JINCHAN_CLEAN_BASE)
 }
-

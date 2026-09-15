@@ -107,6 +107,8 @@ MCP 服务默认关闭，**默认只绑定**设备 IPv4 回环（`127.0.0.1`）�
 
 应用内页面、状态、设置、分析和悬浮窗操作通过语义工具暴露（严格 inputSchema），不依赖屏幕坐标点击。常用能力包括：`inspect` 一键诊断、运行态快照、局部 `patch_settings`（含批量 operations）、命名配置 profile、赛季/阈值/主题/悬浮窗、开发者开关、调试帧触发/读取（HIGH_RISK + `allowDebugFrames`）、算法列表/激活/下载/一键升级、`get_events` 增量事件、版本/更新检查/运行时指标、自动操作门闩解释、日志与脱敏诊断导出、MCP 状态/访问日志。写操作受四级权限与工具策略；「信任本次会话」仅绑定当前内存会话，服务重启后失效。即使「完整访问」也不能绕过系统录屏 / 悬浮窗 / 无障碍 / 安装对话框。
 
+H6-C4D 复用同一 MCP 服务提供 `app://rikka/observation/v1/latest` 与 `submit_rikka_decision_v1`：前者读取由同帧 JoinedState 纯映射的不可变观测，后者仅按配对 provenance/UID 验证 Rikka 决策并终止；Rikka 是唯一高层策略大脑，桥接层不调用 C3、不执行动作，也不建立第二套传输。
+
 ## 代码结构
 
 ```text

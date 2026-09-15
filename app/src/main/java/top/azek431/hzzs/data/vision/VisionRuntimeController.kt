@@ -38,16 +38,11 @@ import top.azek431.hzzs.core.model.GestureBackend
 import top.azek431.hzzs.core.model.OverlayBlockReason
 import top.azek431.hzzs.core.model.RuntimeStatus
 import top.azek431.hzzs.core.preferences.SettingsRepository
-import top.azek431.hzzs.data.jinchan.action.JinChanActionContext
-import top.azek431.hzzs.data.jinchan.decision.FailClosedJinChanDecisionEngine
-import top.azek431.hzzs.data.jinchan.decision.JinChanDecisionInput
-import top.azek431.hzzs.data.jinchan.decision.JinChanJoinResult
-import top.azek431.hzzs.data.jinchan.decision.JinChanSameEvidenceAssembler
-import top.azek431.hzzs.data.jinchan.decision.JinChanSameEvidenceFacts
+import top.azek431.hzzs.data.jinchan.bridge.RikkaBridgeStore
+import top.azek431.hzzs.data.jinchan.bridge.JinChanProductionEvidenceJoiner
+import top.azek431.hzzs.data.jinchan.bridge.ProductionJoinResult
 import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
 import top.azek431.hzzs.data.jinchan.execution.JinChanExecutionCoordinator
-import top.azek431.hzzs.data.jinchan.perception.JinChanStableState
-import top.azek431.hzzs.data.jinchan.perception.JinChanStableUiState
 import top.azek431.hzzs.data.jinchan.state.JinChanShadowStatePublisher
 import top.azek431.hzzs.platform.compat.CaptureBackendResolution
 import top.azek431.hzzs.platform.compat.GestureCapabilityResolver
@@ -102,6 +97,7 @@ class VisionRuntimeController @Inject constructor(
     private val jinChanExecutionCoordinator: JinChanExecutionCoordinator,
     private val gestureCapabilities: GestureCapabilityResolver,
     private val jinChanShadowStatePublisher: JinChanShadowStatePublisher,
+    private val rikkaBridgeStore: RikkaBridgeStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lifecycleMutex = Mutex()
@@ -127,6 +123,8 @@ class VisionRuntimeController @Inject constructor(
 
     @Volatile
     private var jinChanSessionId: JinChanFrameSessionId? = null
+
+    private var jinChanEvidenceJoiner = JinChanProductionEvidenceJoiner()
 
     // Shizuku 持续监控相关字段
     private var shizukuHealthCheckJob: Job? = null
@@ -239,6 +237,7 @@ class VisionRuntimeController @Inject constructor(
             }
             activeSource = source
             val jinChanSession = jinChanShadowStatePublisher.startSession()
+            jinChanEvidenceJoiner = JinChanProductionEvidenceJoiner()
             jinChanSessionId = jinChanSession
             mutableStatus.value = RuntimeStatus(
                 running = true,
@@ -523,23 +522,9 @@ class VisionRuntimeController @Inject constructor(
                         staleTimeoutNanos = JINCHAN_FRAME_STALE_TIMEOUT_NS,
                     )
                     if (shadowState != null) {
-                        // C4C stops at a fail-closed decision skeleton. Production ownership joining
-                        // is not available yet, and must never be repaired from a later frame/ledger.
-                        val facts = JinChanSameEvidenceFacts(
-                            shadowState = shadowState,
-                            ownershipSnapshot = null,
-                            actionContext = JinChanActionContext(
-                                sessionId = shadowState.sessionId,
-                                evidenceSessionId = shadowState.sessionId,
-                                currentSequence = shadowState.frameSeq,
-                                evidenceSequence = shadowState.frameSeq,
-                                maximumSequenceAge = 0L,
-                                stableState = JinChanStableState(null, JinChanStableUiState.UNKNOWN),
-                            ),
-                        )
-                        val joined = JinChanSameEvidenceAssembler.assemble(facts)
-                        if (joined is JinChanJoinResult.Assembled) {
-                            FailClosedJinChanDecisionEngine.decide(JinChanDecisionInput(joined.snapshot))
+                        val joined = jinChanEvidenceJoiner.join(shadowState)
+                        if (joined is ProductionJoinResult.Joined) {
+                            rikkaBridgeStore.publish(joined.value.snapshot)
                         }
                     }
                     if (generation.get() != token || jinChanSessionId != jinChanSession) return@use

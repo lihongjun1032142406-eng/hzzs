@@ -19,6 +19,10 @@ abstract class ToolExecutorBindings {
     @Binds
     @IntoSet
     @Singleton
+    abstract fun bindRikkaBridge(impl: RikkaBridgeExecutor): ToolExecutor
+    @Binds
+    @IntoSet
+    @Singleton
     abstract fun bindRuntimeControl(impl: RuntimeControlExecutor): ToolExecutor
 
     @Binds

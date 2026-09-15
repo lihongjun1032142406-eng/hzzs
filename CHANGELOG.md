@@ -9,6 +9,8 @@
 
 ## [Unreleased]
 
+- 实现 H6-C4D Rikka Observation/Decision Bridge：同帧 ownership join 经既有 MCP 暴露不可变 V1 观测并接收严格 provenance/UID 校验的决策，验证后终止且不调用 C3/真实动作。
+
 ### 新增
 
 - **JinChan H6-A 语义动作安全门**：新增 Buy/Move/Sell/Refresh/BuyXp 的 pixel-free sealed contract、不可变证据上下文、稳定拒绝原因与纯 fail-closed projector；默认关闭，严格校验包名、session/序列新鲜度、UI/场景、H5 ownership 与 reconciliation，且不包含坐标解析或真实输入传输。

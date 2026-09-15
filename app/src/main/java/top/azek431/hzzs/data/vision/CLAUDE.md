@@ -35,9 +35,9 @@ H6-C2（当前无 decision producer，且 ACTION_ENABLED=false）：
   VisionRuntimeController lifecycle → JinChanExecutionCoordinator
     → enable gates → one GestureArbiter → GestureDispatcherFactory
 
-H6-C4C 上游骨架：`publishFrame` 返回的显式 same-frame state 只尝试进入
-`JinChanSameEvidenceAssembler`；production ownership join 尚不存在时 typed-block。只有完整同源 snapshot
-才调用 fail-closed Decision skeleton，结果在 controller 内终止，不生成 intent/request，也不调用 H6-C3。
+H6-C4D：`publishFrame` 返回的显式 same-frame state 同步进入 reconciliation → 单次 ledger snapshot →
+ownership projection → `JinChanSameEvidenceAssembler`；仅完整同源 snapshot 发布到 Rikka bridge，歧义/不可用 fail-closed。
+桥接 Decision 只做配对 provenance/UID 验证并终止，不生成 C3 request、不执行动作。
 ```
 
 ### 配置流
