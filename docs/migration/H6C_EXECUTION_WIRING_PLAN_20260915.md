@@ -61,6 +61,27 @@ Acceptance before any real-device enablement:
 - Production defaults: `ACTION_ENABLED=false`, `REAL_ACTION_REACHABLE=false`, `ACTION_EXECUTED=0`, `SELL_ZONE_CALIBRATED=false`.
 - Real-device arming/calibration is a later separately authorized phase; H6-C completion does not authorize it.
 
+### C3 Contract FIX1 delivery — 2026-09-15
+
+Commander FIX1 resolves the precheck ownership questions without authorizing a production caller:
+
+- `JinChanRuntimeActionIntegration.submit(JinChanRuntimeActionRequest)` is the only C3 entry and performs only
+  input validation → frozen H6-A → frozen H6-B → frozen H6-C2; C2 remains the caller of frozen C1.
+- A future producer is the only request/intent and process-local monotonic positive logical `trackId` owner. C3 accepts
+  the ID once and preserves it; no production producer or generator is connected in H6-C3.
+- `JinChanCoordinateProfileProvider` defines the immutable-snapshot boundary. The request carries one nullable snapshot,
+  read once by `submit`; no production implementation/default coordinates exist. Missing profile is typed BLOCKED.
+- Move/Sell require immutable source evidence whose session, evidence sequence, and ownership revision exactly match the
+  H6-A context. C3 never derives source location from uid or a later frame.
+- C3 aggregates structured provenance without changing frozen value types. Fields that have not been produced remain null;
+  C1 rejection continues to surface as C2 `Execution(AdapterRejected)`.
+- JVM integration tests use explicit synthetic normalized profiles and the existing C2 fake-dispatch path. Synthetic Sell
+  calibration is test-only and does not alter production state.
+
+Delivery invariants remain: no `VisionRuntimeController` change, no production caller, no second arbiter, no platform
+transport call, no ledger commit, `ACTION_ENABLED=false`, `REAL_ACTION_REACHABLE=false`, `ACTION_EXECUTED=0`, and
+`SELL_ZONE_CALIBRATED=false`.
+
 ## Frozen exclusions
 
 No new action semantics; no raw coordinates; no ROI-as-hitbox; no normalized-to-pixel duplicate converter; no direct Accessibility/Shizuku/Root/shell input calls from JinChan; no old `AlgorithmPipeline`, `download_algorithm`, or `app://runtime/snapshot`; no H1-H5 reopening.
