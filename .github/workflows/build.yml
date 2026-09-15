@@ -22,6 +22,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      # Bootstrap cmdline-tools explicitly because ubuntu-latest does not guarantee sdkmanager on PATH.
       - name: Bootstrap Android SDK command-line tools
         run: |
           set -euo pipefail
