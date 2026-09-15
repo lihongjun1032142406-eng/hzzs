@@ -20,11 +20,8 @@
 ## 数据流
 
 ```text
-VisionRuntimeController.maybeDispatch（帧路径）
-   ├─ ledger.canPlan(...)         ← 规划期同步快照读（tryLock, fail-closed）
-   ├─ TriggerDistanceAutoTuner.effective ← 自调后触发带
-   └─ actionJob → dispatchPlan
-         └─ arbiter.dispatch(action)
+JinChanExecutionCoordinator（H6-C2 唯一 arbiter owner）
+   └─ arbiter.dispatch(action)
                └─ GestureDispatcherFactory.dispatcher(backend).dispatch
                      ├─ ACCESSIBILITY → HzzsAccessibilityService.dispatchGesture
                      ├─ SHIZUKU      → ShellInputGestureDispatcher (input tap/swipe + dumpsys)
