@@ -24,7 +24,7 @@ MCP 工具执行的**按 feature 分组**层。每个 [top.azek431.hzzs.mcp.exec
 | `ProfileExecutor.kt` | 配置 profile：save/load/list/delete | 4 |
 | `DebugFrameExecutor.kt` | 调试帧：list/clear/get/capture | 4 |
 | `SystemExecutor.kt` | 系统：version/metrics/check_update/inspect/permissions/open_system_settings/export 等 | 12 |
-| `RikkaBridgeExecutor.kt` | RikkaDecisionV1 配对验证并终止（无 C3/执行） | 1 |
+| `RikkaBridgeExecutor.kt` | RikkaDecisionV1 配对验证后进入 C5 full dry-run，并在 coordinator/transport 前硬停止 | 1 |
 
 工具总数以当前 catalog 为准，并与 [top.azek431.hzzs.mcp.McpToolCatalog] 保持三向一致（catalog / executorIndex / 工具目录 JSON）。
 

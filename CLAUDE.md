@@ -63,6 +63,7 @@ HZZS（火崽崽奇妙屋）是本地 Android 画面分析工具：截图、C++ 
 - JinChan H6-A 是 shadow-only 语义边界：`data/jinchan/action` 只验证 H1-H5/调用方显式证据，默认关闭，
   不得依赖 `GestureSpec`、自动操作传输、Accessibility/Root/Shizuku，也不得生成最终屏幕坐标。
 - JinChan H6-C4D 只把同帧 reconciliation、单次 ledger snapshot、ownership 与 JoinedState 纯映射为 `RikkaObservationV1`，并复用既有 MCP 接收严格 provenance/UID 配对的 `RikkaDecisionV1`；Rikka 是唯一高层策略大脑，验证后终止，禁止 C3 调用、真实动作与第二传输。
+- JinChan H6-C5 仅把 C4D typed validation 与原配 immutable JoinedState 送入 full dry-run boundary，复用 H6-A/H6-B 后在 coordinator/transport 前硬停止；production profile 不得伪造（校准留待 C6），`REAL_ACTION_REACHABLE=false`、`ACTION_EXECUTED=0`。
 
 - 取帧为**完成驱动**：上一轮分析结束后再 `nextFrame`；不按固定 FPS 主动丢帧（开发者 `frameRateLimit` 字段可保留，但不得假定仍被消费）。
 - MediaProjection 为 CONFLATED + 最新帧；HUD 显示时临时隐身、等一帧提交，并对 MediaProjection/AUTO 排空可能含旧合成层的一帧。
