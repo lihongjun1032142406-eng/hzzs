@@ -1,0 +1,2 @@
+H6-B recovered from Codex local commit bc261aa06a4e73642265c78a5eef19c5f19f4b71.
+Awaiting authoritative GitHub Actions validation.
