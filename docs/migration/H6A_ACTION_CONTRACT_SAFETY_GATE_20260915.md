@@ -1,6 +1,6 @@
 # H6-A JinChan Action Contract + Safety Gate
 
-Status: PLANNED / SHADOW-ONLY
+Status: IMPLEMENTED / SHADOW-ONLY
 Base: H5 frozen baseline `3cb89e774f144c7100049c93d42416a8c8d6265f`
 Branch: `jinchan-h6-action-precheck`
 
@@ -97,3 +97,14 @@ Hard safety acceptance after H6-A:
 
 - H6-B: Approved semantic action -> coordinate/gesture resolver; may remain shadow-only.
 - H6-C: controlled integration with existing HZZS GestureArbiter/Dispatcher transport. Real input requires separate explicit authorization and acceptance.
+
+## Implemented boundary
+
+- Production contract and pure gate: `app/src/main/java/top/azek431/hzzs/data/jinchan/action/`.
+- The gate uses caller-supplied session/sequence age, stable UI, package, explicit UI permissions, H5 ownership revision,
+  Board/Bench/Shop trust, and reconciliation status. It reads no Android clock and mutates no H5 value.
+- `actionEnabled` and every caller-supplied permission default to false. Approval remains a data-only capability without
+  execution methods, gesture specifications, or coordinates.
+- Focused JVM tests cover each action, fail-closed reasons, determinism/non-mutation, and forbidden-source scanning.
+
+Hard safety state remains `ACTION_ENABLED=false`, `REAL_ACTION_REACHABLE=false`, `ACTION_EXECUTED=0`.

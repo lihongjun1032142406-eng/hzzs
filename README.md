@@ -51,6 +51,9 @@
 > JinChan 迁移状态：H1/H2/H3/H4-A 已冻结，H4-B 已接入同帧 Board Occupancy typed observation、
 > Scene Truth Gate 与污染门控；Board Identity、Bench、Decision 与 Action 未启用。Gold 仍为 best-effort，
 > Shop 仅在稳定 `inGame && SHOP_OPEN` 且完整构建时可用。
+>
+> H6-A 仅新增 JinChan 像素无关的语义动作契约与纯安全门：默认 `actionEnabled=false`，只产出带证据来源的
+> Approved/Rejected 值；未接入坐标解析、手势或任何真实输入，`REAL_ACTION_REACHABLE=false`。
 
 - 单一 `app` 模块，业务代码按职责分包（Compose + Hilt）。
 - **多赛季**障碍配置，共用视口比例坐标；首次安装默认赛季**只**由源码 `AppConfig.DEFAULT_SELECTED_SCENE` 决定（文档不写死赛季名）。
