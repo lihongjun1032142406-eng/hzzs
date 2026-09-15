@@ -39,13 +39,13 @@ import top.azek431.hzzs.core.model.OverlayBlockReason
 import top.azek431.hzzs.core.model.RuntimeStatus
 import top.azek431.hzzs.core.preferences.SettingsRepository
 import top.azek431.hzzs.data.jinchan.frame.JinChanFrameSessionId
+import top.azek431.hzzs.data.jinchan.execution.JinChanExecutionCoordinator
 import top.azek431.hzzs.data.jinchan.state.JinChanShadowStatePublisher
 import top.azek431.hzzs.platform.compat.CaptureBackendResolution
 import top.azek431.hzzs.platform.compat.GestureCapabilityResolver
 import top.azek431.hzzs.platform.compat.ShizukuHealthCheck
 import top.azek431.hzzs.platform.compat.resolveEffectiveCaptureBackend
 import top.azek431.hzzs.platform.compat.resolveEffectiveGestureBackend
-import top.azek431.hzzs.service.automation.GestureDispatcherFactory
 import top.azek431.hzzs.service.automation.HzzsAccessibilityService
 import top.azek431.hzzs.service.capture.CaptureState
 import top.azek431.hzzs.service.capture.FrameSource
@@ -91,7 +91,7 @@ class VisionRuntimeController @Inject constructor(
     private val sources: FrameSourceFactory,
     private val overlay: OverlayController,
     private val debugFrameRecorder: DebugFrameRecorder,
-    private val gestureDispatchers: GestureDispatcherFactory,
+    private val jinChanExecutionCoordinator: JinChanExecutionCoordinator,
     private val gestureCapabilities: GestureCapabilityResolver,
     private val jinChanShadowStatePublisher: JinChanShadowStatePublisher,
 ) {
@@ -205,6 +205,7 @@ class VisionRuntimeController @Inject constructor(
             }
 
             latestGestureBackend.set(finalGestureBackend)
+            jinChanExecutionCoordinator.startSession(config.automation, finalGestureBackend)
             val gestureFallbackReason = healthCheckReason ?: gestureResolution.fallbackReason
 
             AppLog.i(
@@ -252,6 +253,7 @@ class VisionRuntimeController @Inject constructor(
                 // 分析启停绑定前台服务，降低 OEM 后台杀进程概率；仅 alive 期间提优先级。
                 VisionAnalysisForegroundService.start(appContext)
             } catch (error: Throwable) {
+                jinChanExecutionCoordinator.stopSession()
                 jinChanShadowStatePublisher.stopSession(jinChanSession)
                 jinChanSessionId = null
                 activeSource = null
@@ -279,6 +281,7 @@ class VisionRuntimeController @Inject constructor(
     suspend fun stop() = lifecycleMutex.withLock {
         val prevGen = generation.get()
         generation.incrementAndGet()
+        jinChanExecutionCoordinator.stopSession()
         AppLog.i("vision", "stop session prevGen=$prevGen")
         jinChanSessionId?.let(jinChanShadowStatePublisher::stopSession)
         jinChanSessionId = null
@@ -311,7 +314,8 @@ class VisionRuntimeController @Inject constructor(
      * Clean Base：本阶段不存在任何自动操作，恒为空操作（fail-closed）。
      */
     fun cancelPendingActions() {
-        AppLog.i("vision", "clean-base: cancelPendingActions ignored (no real actions)")
+        jinChanExecutionCoordinator.cancelPending()
+        AppLog.i("vision", "cancelPendingActions requested (best-effort; no hard system cancellation)")
     }
 
     /** 启动持续健康监控；仅本会话原始手势路径选择 Shizuku 时运行。 */

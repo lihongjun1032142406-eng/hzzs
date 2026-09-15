@@ -21,13 +21,22 @@ Acceptance: pure adapter tests green; `REAL_ACTION_REACHABLE=false`, `ACTION_EXE
 
 ## C2 — Armed Dispatch Boundary
 
+Implementation contract frozen on 2026-09-15:
+- `JinChanExecutionCoordinator` is the single owner of one `GestureArbiter` and the monotonic positive action-id sequence.
+- The caller supplies `trackId`; the coordinator supplies `SystemClock.uptimeMillis()` timestamps and a fixed 2000ms TTL before invoking C1.
+- The coordinator uses the same injected `SystemClock.uptimeMillis` function instance for envelope timestamps, expiry checks and its single arbiter. Dispatcher foreground-freshness clocks remain transport-owned and are outside the action TTL domain.
+- The coordinator checks active runtime, saved automation/disclaimer state and `AppConfig.ACTION_ENABLED` before both envelope preparation and the factory/arbiter boundary.
+- `VisionRuntimeController` only opens/closes the coordinator session and forwards best-effort cancellation; it does not own decisions, coordinates, receipts or a second arbiter.
+- Final foreground freshness/package/window validation remains in the existing dispatchers. Cancellation does not claim to retract a gesture already accepted by Android or shell.
+- C2 includes this minimal `VisionRuntimeController` lifecycle wiring. C3 still owns the complete H6-A → H6-B → H6-C execution integration and Shadow-to-Armed Switch.
+
 Goal: add the single JinChan-specific dispatch boundary that consumes C1 output and delegates only to the existing `GestureArbiter`.
 
 Required behavior:
 - Explicit runtime arming flag defaults `false`.
 - Recheck exact target package immediately before dispatch.
 - Recheck expiry immediately before dispatch.
-- Only an already prepared C1 action may enter.
+- The public C2 input is H6-B `Resolved` plus a caller-supplied positive `trackId`. The coordinator generates execution metadata and must invoke the frozen C1 adapter internally; only C1 `Ready` may cross the internal dispatch boundary into `GestureArbiter`. C1 `Rejected` terminates fail-closed without dispatch.
 - Delegate to existing `GestureArbiter`; do not create a second arbiter or call `GestureDispatcher` directly.
 - Return typed receipt/result; no ledger ownership mutation and no decision planning.
 - Tests use fake dispatcher/arbiter path and prove disabled/package/expiry fail closed and at-most-one delegated dispatch.

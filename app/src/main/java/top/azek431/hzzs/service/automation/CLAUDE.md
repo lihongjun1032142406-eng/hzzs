@@ -23,7 +23,7 @@
 ## 数据流
 
 ```text
-VisionRuntimeController.dispatchPlan → arbiter.dispatch(action)
+JinChanExecutionCoordinator → arbiter.dispatch(action)
   → GestureDispatcherFactory.dispatcher(backend).dispatch
       ├─ ACCESSIBILITY → HzzsAccessibilityService.dispatchGesture（主线程）
       ├─ SHIZUKU      → ShellInputGestureDispatcher（input tap/swipe + dumpsys）

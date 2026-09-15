@@ -1,6 +1,6 @@
 # data/vision — 视觉运行时（帧循环所有者）
 
-应用运行时的**编排层**。`VisionRuntimeController` 是 native 引擎、`MultiObjectTracker`、动作账本、手势仲裁器的**唯一所有者**，串行编排「截图 → Native 分析 → 跨帧追踪 → 悬浮窗 → 可选自动动作」。
+应用运行时的**编排层**。Clean Base 的 `VisionRuntimeController` 是截图会话与外层生命周期 owner；H6-C2 的单一 `JinChanExecutionCoordinator` 独占 `GestureArbiter`，controller 只转发生命周期与 best-effort cancellation。
 
 > 目录名是 `data`，但真实职责是「运行时编排」—— 看调用链比看包名更准（`docs/navigation/README.md`）。
 
@@ -29,8 +29,11 @@ FrameSource（service.capture）
       → MultiObjectTracker.update（按 analysisSequence）
       → withApproximateDisplayContour（仅 HUD）
       → OverlayController.show（service.overlay, 呈现层）
-      → maybeDispatch → actionJob → dispatchPlan → GestureArbiter
-          → GestureDispatcherFactory（service.automation）
+      → JinChan shadow frame bridge
+
+H6-C2（当前无 decision producer，且 ACTION_ENABLED=false）：
+  VisionRuntimeController lifecycle → JinChanExecutionCoordinator
+    → enable gates → one GestureArbiter → GestureDispatcherFactory
 ```
 
 ### 配置流
@@ -46,10 +49,10 @@ SettingsRepository.config / savedConfig
 - 线程：生命周期（start/stop/restart）在 `lifecycleMutex` 下串行；帧循环在 `scope`（Default）；动作在独立 `actionJob`，与分析解耦。
 - `generation` 令牌：stop/start 递增，用于 fail-closed 丢弃陈旧帧与动作。
 - 完成驱动取帧：**无固定 FPS sleep**，上一轮完成后直接 `nextFrame`；HUD 显示时临时 `INVISIBLE` 并等一次显示提交，MediaProjection/AUTO 再排空一张可能含旧合成层的帧。
-- 安全点：场景或算法 generation 变化时**必须**取消 actionJob、清 tracker/ledger/去重/玩家参考；**不允许**分析过程中半热切换算法。
+- H6-C2 coordinator 只拥有执行 envelope/arbiter/typed receipt，不拥有 decision、坐标解析或 ledger commit。
 - 坐标：视觉结果与手势规划使用视口归一化 [0,1]；像素换算只在绘制层与手势分发层。
 - 来源：`Detection.source` 从 JNI 正常结果与 `FilteredDetection` 诊断映射后，经 Validator / Tracker / `AlgorithmDetectionTrace` 保留；未知 native code 回退 `DEFAULT_HEURISTIC`。
-- 自动操作默认关闭；启用后仍受免责声明版本门控；帧龄 ≤ `MAX_FRAME_AGE_MS=1000ms`。
+- 自动操作默认关闭；H6-C2 还受免责声明与 `AppConfig.ACTION_ENABLED` 编译期总闸门控。
 - 安全边界变化（场景/截图后端/自动操作/包名限制/手势后端）→ `cancelActions()`；手势后端切换额外 `clearShellCaches()`。
 - 设置收集器只替换不可变配置快照，不直接操作引擎。
 - `withSavedSafetyGates`：自动操作与截图后端**强制取 saved**，避免设置草稿未保存就派发手势或换源。
