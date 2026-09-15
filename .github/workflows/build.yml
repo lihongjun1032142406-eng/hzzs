@@ -19,7 +19,10 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - uses: android-actions/setup-android@v3
+      - name: Configure Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0"
       - name: Verify Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
       - name: Install Python verification dependencies
