@@ -40,11 +40,7 @@ class JinChanActionSafetyGateTest {
         assertRejected(JinChanActionRejectionReason.INVALID_SLOT, JinChanActionIntent.BuyShopSlot(5), context())
         assertRejected(JinChanActionRejectionReason.SHOP_EVIDENCE_UNAVAILABLE, JinChanActionIntent.BuyShopSlot(0), context(shop = null))
         assertRejected(JinChanActionRejectionReason.SHOP_EVIDENCE_UNTRUSTED, JinChanActionIntent.BuyShopSlot(0), context(shopTrusted = false))
-        assertRejected(
-            JinChanActionRejectionReason.SHOP_SLOT_UNKNOWN,
-            JinChanActionIntent.BuyShopSlot(1),
-            context(shop = shop(ShopContentType.UNKNOWN)),
-        )
+        assertRejected(JinChanActionRejectionReason.SHOP_SLOT_UNKNOWN, JinChanActionIntent.BuyShopSlot(1), context(shop = shop(ShopContentType.UNKNOWN)))
     }
 
     @Test
@@ -53,18 +49,11 @@ class JinChanActionSafetyGateTest {
         assertIs<JinChanActionGateResult.Approved>(gate(move, moveContext()))
         assertRejected(JinChanActionRejectionReason.INVALID_UID, JinChanActionIntent.MoveUnit(0, UnitLocation.Bench(2)), moveContext())
         assertRejected(JinChanActionRejectionReason.UNIT_NOT_ACTIVE, JinChanActionIntent.MoveUnit(99, UnitLocation.Bench(2)), moveContext())
-
         val consumed = JinChanUnitLedger().apply {
-            createWithUid(1, "hero", 1, UnitLocation.Board(1, 1))
-            createWithUid(2, "hero", 1, UnitLocation.Board(1, 2))
-            createWithUid(3, "hero", 1, UnitLocation.Board(1, 3))
-            merge(listOf(1, 2, 3), "hero", 2, UnitLocation.Board(1, 1), resultUid = 4)
+            createWithUid(1, "hero", 1, UnitLocation.Board(1, 1)); createWithUid(2, "hero", 1, UnitLocation.Board(1, 2)); createWithUid(3, "hero", 1, UnitLocation.Board(1, 3)); merge(listOf(1, 2, 3), "hero", 2, UnitLocation.Board(1, 1), resultUid = 4)
         }
         assertRejected(JinChanActionRejectionReason.UNIT_NOT_ACTIVE, move, moveContext(consumed))
-
-        for (location in listOf(UnitLocation.Unknown, UnitLocation.None)) {
-            assertRejected(JinChanActionRejectionReason.UNIT_LOCATION_UNKNOWN, move, moveContext(ledger(location = location)))
-        }
+        for (location in listOf(UnitLocation.Unknown, UnitLocation.None)) assertRejected(JinChanActionRejectionReason.UNIT_LOCATION_UNKNOWN, move, moveContext(ledger(location = location)))
         assertRejected(JinChanActionRejectionReason.INVALID_DESTINATION, JinChanActionIntent.MoveUnit(1, UnitLocation.Board(0, 1)), moveContext())
         assertRejected(JinChanActionRejectionReason.INVALID_DESTINATION, JinChanActionIntent.MoveUnit(1, UnitLocation.None), moveContext())
         assertRejected(JinChanActionRejectionReason.SAME_DESTINATION, JinChanActionIntent.MoveUnit(1, UnitLocation.Board(1, 1)), moveContext())
@@ -84,125 +73,40 @@ class JinChanActionSafetyGateTest {
         assertRejected(JinChanActionRejectionReason.OWNERSHIP_REVISION_MISMATCH, sell, sellContext().copy(expectedOwnershipRevision = 2))
         assertRejected(JinChanActionRejectionReason.OWNERSHIP_AMBIGUOUS, sell, sellContext().copy(ownershipAmbiguous = true))
         assertRejected(JinChanActionRejectionReason.ACTION_UI_EVIDENCE_MISSING, sell, sellContext().copy(uiEvidence = JinChanActionUiEvidence()))
-        assertRejected(
-            JinChanActionRejectionReason.INCOMPATIBLE_UI_SCENE,
-            sell,
-            sellContext().copy(stableState = JinChanStableState(true, JinChanStableUiState.SHOP_OPEN)),
-        )
+        assertRejected(JinChanActionRejectionReason.INCOMPATIBLE_UI_SCENE, sell, sellContext().copy(stableState = JinChanStableState(true, JinChanStableUiState.SHOP_OPEN)))
     }
 
     @Test
     fun shopControlsRequireExplicitCompatibleEvidence() {
         val allowed = context(uiEvidence = JinChanActionUiEvidence(refreshShopAllowed = true, buyXpAllowed = true))
-        assertIs<JinChanActionGateResult.Approved>(gate(JinChanActionIntent.RefreshShop, allowed))
-        assertIs<JinChanActionGateResult.Approved>(gate(JinChanActionIntent.BuyXp, allowed))
-        assertRejected(JinChanActionRejectionReason.ACTION_UI_EVIDENCE_MISSING, JinChanActionIntent.RefreshShop, context())
-        assertRejected(JinChanActionRejectionReason.ACTION_UI_EVIDENCE_MISSING, JinChanActionIntent.BuyXp, context())
+        assertIs<JinChanActionGateResult.Approved>(gate(JinChanActionIntent.RefreshShop, allowed)); assertIs<JinChanActionGateResult.Approved>(gate(JinChanActionIntent.BuyXp, allowed))
+        assertRejected(JinChanActionRejectionReason.ACTION_UI_EVIDENCE_MISSING, JinChanActionIntent.RefreshShop, context()); assertRejected(JinChanActionRejectionReason.ACTION_UI_EVIDENCE_MISSING, JinChanActionIntent.BuyXp, context())
         val boardUi = allowed.copy(stableState = JinChanStableState(true, JinChanStableUiState.BOARD_OR_COMBAT))
-        assertRejected(JinChanActionRejectionReason.INCOMPATIBLE_UI_SCENE, JinChanActionIntent.RefreshShop, boardUi)
-        assertRejected(JinChanActionRejectionReason.INCOMPATIBLE_UI_SCENE, JinChanActionIntent.BuyXp, boardUi)
+        assertRejected(JinChanActionRejectionReason.INCOMPATIBLE_UI_SCENE, JinChanActionIntent.RefreshShop, boardUi); assertRejected(JinChanActionRejectionReason.INCOMPATIBLE_UI_SCENE, JinChanActionIntent.BuyXp, boardUi)
     }
 
-    @Test
-    fun everyActionKindRejectsWhenDisabled() {
-        val intents = listOf(
-            JinChanActionIntent.BuyShopSlot(0),
-            JinChanActionIntent.MoveUnit(1, UnitLocation.Bench(1)),
-            JinChanActionIntent.SellUnit(1),
-            JinChanActionIntent.RefreshShop,
-            JinChanActionIntent.BuyXp,
-        )
-        intents.forEach { assertRejected(JinChanActionRejectionReason.ACTION_DISABLED, it, context(actionEnabled = false)) }
-    }
+    @Test fun everyActionKindRejectsWhenDisabled() { listOf(JinChanActionIntent.BuyShopSlot(0), JinChanActionIntent.MoveUnit(1, UnitLocation.Bench(1)), JinChanActionIntent.SellUnit(1), JinChanActionIntent.RefreshShop, JinChanActionIntent.BuyXp).forEach { assertRejected(JinChanActionRejectionReason.ACTION_DISABLED, it, context(actionEnabled = false)) } }
 
     @Test
     fun sameInputIsDeterministicAndProjectionDoesNotMutateLedgerOrSnapshot() {
-        val ledger = ledger()
-        val beforeLedger = ledger.snapshot()
-        val ownership = JinChanOwnershipProjector.project(beforeLedger)
-        val context = moveContext(ledger).copy(ownership = ownership)
-        val intent = JinChanActionIntent.MoveUnit(1, UnitLocation.Bench(3))
-        assertEquals(gate(intent, context), gate(intent, context))
-        assertEquals(beforeLedger, ledger.snapshot())
-        assertEquals(ownership, context.ownership)
+        val ledger = ledger(); val beforeLedger = ledger.snapshot(); val ownership = JinChanOwnershipProjector.project(beforeLedger); val context = moveContext(ledger).copy(ownership = ownership); val intent = JinChanActionIntent.MoveUnit(1, UnitLocation.Bench(3))
+        assertEquals(gate(intent, context), gate(intent, context)); assertEquals(beforeLedger, ledger.snapshot()); assertEquals(ownership, context.ownership)
     }
 
     @Test
     fun productionActionSourcesHaveNoExecutionTransportReferences() {
-        val root = Path.of("src/main/java/top/azek431/hzzs/data/jinchan/action")
-            .takeIf(Files::exists)
-            ?: Path.of("app/src/main/java/top/azek431/hzzs/data/jinchan/action")
-        val forbidden = listOf(
-            "GestureSpec", "AutomationAction", "GestureArbiter", "GestureDispatcher",
-            "GestureDispatcherFactory", "HzzsAccessibilityService", "dispatchGesture",
-            "android.accessibilityservice", "Shizuku", "root shell input",
-        )
-        val sources = Files.walk(root).use { paths ->
-            paths.filter { Files.isRegularFile(it) && it.extension == "kt" }.map(Files::readString).toList()
-        }
-        forbidden.forEach { token ->
-            assertEquals("forbidden production token: $token", false, sources.any { token in it })
-        }
+        val root = Path.of("src/main/java/top/azek431/hzzs/data/jinchan/action").takeIf(Files::exists) ?: Path.of("app/src/main/java/top/azek431/hzzs/data/jinchan/action")
+        val forbidden = listOf("AutomationAction", "GestureArbiter", "GestureDispatcher", "GestureDispatcherFactory", "HzzsAccessibilityService", "dispatchGesture", "android.accessibilityservice", "Shizuku", "root shell input")
+        val sources = Files.walk(root).use { paths -> paths.filter { Files.isRegularFile(it) && it.extension == "kt" }.map(Files::readString).toList() }
+        forbidden.forEach { token -> assertEquals("forbidden production token: $token", false, sources.any { token in it }) }
     }
 
-    private fun gate(intent: JinChanActionIntent, context: JinChanActionContext) =
-        JinChanActionSafetyGate.evaluate(intent, context)
-
-    private fun assertRejected(reason: JinChanActionRejectionReason, intent: JinChanActionIntent, context: JinChanActionContext) {
-        assertEquals(reason, assertIs<JinChanActionGateResult.Rejected>(gate(intent, context)).reason)
-    }
-
-    private fun context(
-        actionEnabled: Boolean = true,
-        targetPackage: String? = JinChanActionSafetyGate.JINCHAN_PACKAGE,
-        evidenceSessionId: JinChanFrameSessionId = session,
-        currentSequence: Long = 101,
-        shop: ShopObservation? = shop(),
-        shopTrusted: Boolean = true,
-        uiEvidence: JinChanActionUiEvidence = JinChanActionUiEvidence(),
-    ) = JinChanActionContext(
-        actionEnabled = actionEnabled,
-        targetPackage = targetPackage,
-        sessionId = session,
-        evidenceSessionId = evidenceSessionId,
-        currentSequence = currentSequence,
-        evidenceSequence = 100,
-        maximumSequenceAge = 2,
-        stableState = JinChanStableState(true, JinChanStableUiState.SHOP_OPEN),
-        shop = shop,
-        shopTrusted = shopTrusted,
-        uiEvidence = uiEvidence,
-    )
-
-    private fun moveContext(source: JinChanUnitLedger = ledger()): JinChanActionContext {
-        val ownership = JinChanOwnershipProjector.project(source)
-        return context().copy(
-            stableState = JinChanStableState(true, JinChanStableUiState.BOARD_OR_COMBAT),
-            boardTrusted = true,
-            benchTrusted = true,
-            ownership = ownership,
-            ownershipSessionId = session,
-            ownershipSequence = 100,
-            expectedOwnershipRevision = ownership.sourceLedgerRevision,
-            reconcileStatus = ObservationReconcileStatus.NO_CHANGE,
-        )
-    }
-
-    private fun sellContext(source: JinChanUnitLedger = ledger()) = moveContext(source).copy(
-        uiEvidence = JinChanActionUiEvidence(sellAllowed = true),
-    )
-
-    private fun ledger(hero: String? = "hero", location: UnitLocation = UnitLocation.Board(1, 1)) =
-        JinChanUnitLedger().apply { createWithUid(1, hero, 1, location) }
-
-    private fun shop(second: ShopContentType = ShopContentType.HERO_CARD) = ShopObservation(
-        ShopObservationStatus.AVAILABLE,
-        100,
-        List(5) { index -> ShopSlotObservation(index, if (index == 1) second else ShopContentType.HERO_CARD) },
-    )
-
-    private inline fun <reified T> assertIs(value: Any): T {
-        assertTrue(value is T)
-        return value as T
-    }
+    private fun gate(intent: JinChanActionIntent, context: JinChanActionContext) = JinChanActionSafetyGate.evaluate(intent, context)
+    private fun assertRejected(reason: JinChanActionRejectionReason, intent: JinChanActionIntent, context: JinChanActionContext) { assertEquals(reason, assertIs<JinChanActionGateResult.Rejected>(gate(intent, context)).reason) }
+    private fun context(actionEnabled: Boolean = true, targetPackage: String? = JinChanActionSafetyGate.JINCHAN_PACKAGE, evidenceSessionId: JinChanFrameSessionId = session, currentSequence: Long = 101, shop: ShopObservation? = shop(), shopTrusted: Boolean = true, uiEvidence: JinChanActionUiEvidence = JinChanActionUiEvidence()) = JinChanActionContext(actionEnabled = actionEnabled, targetPackage = targetPackage, sessionId = session, evidenceSessionId = evidenceSessionId, currentSequence = currentSequence, evidenceSequence = 100, maximumSequenceAge = 2, stableState = JinChanStableState(true, JinChanStableUiState.SHOP_OPEN), shop = shop, shopTrusted = shopTrusted, uiEvidence = uiEvidence)
+    private fun moveContext(source: JinChanUnitLedger = ledger()): JinChanActionContext { val ownership = JinChanOwnershipProjector.project(source); return context().copy(stableState = JinChanStableState(true, JinChanStableUiState.BOARD_OR_COMBAT), boardTrusted = true, benchTrusted = true, ownership = ownership, ownershipSessionId = session, ownershipSequence = 100, expectedOwnershipRevision = ownership.sourceLedgerRevision, reconcileStatus = ObservationReconcileStatus.NO_CHANGE) }
+    private fun sellContext(source: JinChanUnitLedger = ledger()) = moveContext(source).copy(uiEvidence = JinChanActionUiEvidence(sellAllowed = true))
+    private fun ledger(hero: String? = "hero", location: UnitLocation = UnitLocation.Board(1, 1)) = JinChanUnitLedger().apply { createWithUid(1, hero, 1, location) }
+    private fun shop(second: ShopContentType = ShopContentType.HERO_CARD) = ShopObservation(ShopObservationStatus.AVAILABLE, 100, List(5) { index -> ShopSlotObservation(index, if (index == 1) second else ShopContentType.HERO_CARD) })
+    private inline fun <reified T> assertIs(value: Any): T { assertTrue(value is T); return value as T }
 }
